@@ -39,15 +39,27 @@ jobs:
       with:
         gradle-version: 8.2
       
+    - name: Download Gradle Wrapper JAR if missing
+      if: hashFiles('gradle/wrapper/gradle-wrapper.jar') == ''
+      run: |
+        mkdir -p gradle/wrapper
+        curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar || \
+        wget -O gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar || \
+        echo "Will generate wrapper using gradle command"
+      
+    - name: Generate Gradle Wrapper if still missing
+      if: hashFiles('gradlew') == '' || hashFiles('gradle/wrapper/gradle-wrapper.jar') == ''
+      run: |
+        if [ ! -f "./gradlew" ]; then
+          gradle wrapper --gradle-version 8.2 --distribution-type bin
+        fi
+        if [ -f "./gradlew" ]; then
+          chmod +x ./gradlew
+        fi
+      
     - name: Make gradlew executable
       if: hashFiles('gradlew') != ''
       run: chmod +x ./gradlew
-      
-    - name: Generate Gradle Wrapper if missing
-      if: hashFiles('gradlew') == ''
-      run: |
-        gradle wrapper --gradle-version 8.2 --distribution-type bin
-        chmod +x ./gradlew
       
     - name: Build debug APK
       if: github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event.inputs.build_type == ''
