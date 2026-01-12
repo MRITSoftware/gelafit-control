@@ -39,27 +39,14 @@ jobs:
       with:
         gradle-version: 8.2
       
-    - name: Download Gradle Wrapper JAR if missing
+    - name: Generate Gradle Wrapper
       run: |
-        if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-          echo "Baixando gradle-wrapper.jar..."
-          mkdir -p gradle/wrapper
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "Tentando baixar de fonte alternativa..."
-            wget -O gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar || true
-          fi
-        fi
-      
-    - name: Generate Gradle Wrapper if still missing
-      run: |
-        if [ ! -f "./gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-          echo "Gerando Gradle Wrapper completo..."
-          gradle wrapper --gradle-version 8.2 --distribution-type bin
-        fi
-        if [ -f "./gradlew" ]; then
-          chmod +x ./gradlew
-        fi
+        # Sempre gera o wrapper completo para garantir que todos os arquivos existam
+        echo "Gerando Gradle Wrapper completo..."
+        gradle wrapper --gradle-version 8.2 --distribution-type bin
+        chmod +x ./gradlew
+        echo "Gradle Wrapper gerado com sucesso!"
+        ls -la gradle/wrapper/ || echo "Pasta gradle/wrapper criada"
       
     - name: Build debug APK
       if: github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event.inputs.build_type == ''
