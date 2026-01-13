@@ -88,7 +88,7 @@ class AppSelectionActivity : AppCompatActivity() {
                     
                     val adapter = ArrayAdapter(
                         this@AppSelectionActivity,
-                        android.R.layout.simple_list_item_1,
+                        R.layout.list_item_app,
                         appsList.map { "${it.name}\n${it.packageName}" }
                     )
                     listView.adapter = adapter

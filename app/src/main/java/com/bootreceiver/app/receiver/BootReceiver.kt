@@ -29,16 +29,31 @@ class BootReceiver : BroadcastReceiver() {
                 if (targetPackageName.isNullOrEmpty()) {
                     Log.w(TAG, "Nenhum app configurado. Abrindo tela de seleção...")
                     // Se não houver app configurado, abre a tela de seleção
+                    // Usa FLAG_ACTIVITY_NEW_TASK e FLAG_ACTIVITY_CLEAR_TOP para garantir que abra mesmo com tela bloqueada
                     val selectionIntent = Intent(context, 
                         com.bootreceiver.app.ui.AppSelectionActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        // Tenta abrir mesmo com tela bloqueada (requer permissão em Android 10+)
+                        addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                     }
-                    context.startActivity(selectionIntent)
+                    try {
+                        context.startActivity(selectionIntent)
+                        Log.d(TAG, "Tela de seleção iniciada")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao abrir tela de seleção: ${e.message}", e)
+                    }
                 } else {
                     Log.d(TAG, "App alvo configurado: $targetPackageName")
                     // Inicia o serviço que verifica internet e abre o app
                     val serviceIntent = Intent(context, BootService::class.java)
-                    context.startService(serviceIntent)
+                    try {
+                        context.startService(serviceIntent)
+                        Log.d(TAG, "BootService iniciado")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao iniciar BootService: ${e.message}", e)
+                    }
                 }
             }
             else -> {

@@ -235,13 +235,45 @@ Adicione um `WatchdogService` que monitora se o app alvo está rodando e o reini
 - **Recuperação automática**: Se o app alvo fechar, o próximo boot o abrirá novamente
 - **Sem interface**: Após configuração, o app roda completamente em background
 
+## 🔒 Bloqueio de Tela
+
+### O app funciona com tela bloqueada?
+
+**Sim!** O `BOOT_COMPLETED` funciona mesmo com tela bloqueada. No entanto:
+
+1. **Primeira instalação**: O app precisa ser aberto **manualmente pelo menos uma vez** após a instalação para o Android registrar o BroadcastReceiver. Após isso, funcionará automaticamente.
+
+2. **Recomendação para Digital Signage**: 
+   - **Desabilite o bloqueio de tela** para melhor experiência
+   - Vá em: Configurações > Segurança > Bloqueio de tela > Nenhum
+   - Ou use: `adb shell settings put secure lock_screen_lock_after_timeout 0`
+
+3. **Tablets/Dispositivos com bloqueio**:
+   - O app funcionará, mas o app alvo pode não abrir se a tela estiver bloqueada
+   - **Solução**: Desabilite o bloqueio de tela ou configure para não bloquear automaticamente
+
+### Como garantir que funcione
+
+```bash
+# Desabilitar bloqueio de tela (requer root ou ADB)
+adb shell settings put secure lock_screen_lock_after_timeout 0
+
+# Desabilitar sleep da tela
+adb shell settings put system screen_off_timeout 2147483647
+
+# Manter tela sempre ligada quando conectado
+adb shell settings put global stay_on_while_plugged_in 7
+```
+
 ## 🐛 Troubleshooting
 
 ### App não abre após boot
 
-1. Verifique logs: `adb logcat | grep BootReceiver`
-2. Verifique se o receiver está registrado: `adb shell dumpsys package com.bootreceiver.app`
-3. Teste manualmente: `adb shell am broadcast -a android.intent.action.BOOT_COMPLETED`
+1. **Verifique se o app foi aberto manualmente após instalação** (necessário para registrar o receiver)
+2. Verifique logs: `adb logcat | grep BootReceiver`
+3. Verifique se o receiver está registrado: `adb shell dumpsys package com.bootreceiver.app | grep receiver`
+4. Teste manualmente: `adb shell am broadcast -a android.intent.action.BOOT_COMPLETED`
+5. Verifique se há app configurado: `adb shell run-as com.bootreceiver.app cat /data/data/com.bootreceiver.app/shared_prefs/BootReceiverPrefs.xml`
 
 ### Internet não detectada
 

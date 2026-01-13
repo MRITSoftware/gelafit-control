@@ -36,9 +36,13 @@ class AppLauncher(private val context: Context) {
             }
             
             // Adiciona flags necessárias para abrir o app
+            // FLAG_ACTIVITY_NEW_TASK é essencial para abrir de um contexto não-Activity
+            // FLAG_ACTIVITY_CLEAR_TOP garante que não haja múltiplas instâncias
+            // FLAG_ACTIVITY_SINGLE_TOP evita recriação se já estiver no topo
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             
             // Abre o app
             context.startActivity(launchIntent)
