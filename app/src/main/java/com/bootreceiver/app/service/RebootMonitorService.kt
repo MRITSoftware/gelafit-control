@@ -154,24 +154,45 @@ class RebootMonitorService : Service() {
                 val hasRebootCommand = supabaseManager.checkRebootCommand(deviceId)
                 
                 if (hasRebootCommand) {
-                    Log.d(TAG, "Comando de reiniciar encontrado! Executando...")
+                    Log.d(TAG, "⚠️ Comando de reiniciar encontrado! Executando...")
+                    
+                    // Verifica Device Admin antes de tentar reiniciar
+                    val isDeviceAdminActive = rebootManager.isDeviceAdminActive()
+                    Log.d(TAG, "Device Admin ativo: $isDeviceAdminActive")
+                    
+                    if (!isDeviceAdminActive) {
+                        Log.e(TAG, "❌ Device Admin NÃO está ativo! Não é possível reiniciar.")
+                        Log.e(TAG, "Por favor, ative o Device Admin nas configurações do dispositivo.")
+                        // Solicita Device Admin novamente
+                        rebootManager.requestDeviceAdmin()
+                        // Aguarda antes da próxima verificação
+                        delay(CHECK_INTERVAL_MS)
+                        continue
+                    }
                     
                     // Marca como executado antes de reiniciar (para evitar loop)
-                    supabaseManager.markCommandAsExecuted(deviceId)
+                    val marked = supabaseManager.markCommandAsExecuted(deviceId)
+                    Log.d(TAG, "Comando marcado como executado: $marked")
                     
                     // Aguarda um pouco para garantir que o comando foi salvo
-                    delay(1000)
+                    delay(2000)
                     
                     // Tenta reiniciar
+                    Log.d(TAG, "Tentando reiniciar dispositivo...")
                     val rebootSuccess = rebootManager.reboot()
                     
                     if (rebootSuccess) {
-                        Log.d(TAG, "Comando de reiniciar enviado com sucesso!")
+                        Log.d(TAG, "✅ Comando de reiniciar enviado com sucesso! Dispositivo será reiniciado.")
                         // O dispositivo será reiniciado, então o serviço será parado
+                        delay(2000) // Aguarda um pouco antes de parar o serviço
                         stopSelf()
                         return
                     } else {
-                        Log.w(TAG, "Falha ao reiniciar. Verifique se Device Admin está ativo.")
+                        Log.e(TAG, "❌ Falha ao reiniciar dispositivo.")
+                        Log.e(TAG, "Verifique:")
+                        Log.e(TAG, "  1. Device Admin está ativo? $isDeviceAdminActive")
+                        Log.e(TAG, "  2. Permissões de reboot estão configuradas?")
+                        Log.e(TAG, "  3. Dispositivo suporta reboot remoto?")
                         // Se falhar, continua monitorando
                     }
                 } else {

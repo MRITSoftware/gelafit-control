@@ -57,36 +57,87 @@ class RebootManager(private val context: Context) {
     }
     
     /**
-     * Tenta reiniciar o dispositivo
+     * Tenta reiniciar o dispositivo usando múltiplos métodos
      * 
      * @return true se o comando foi enviado com sucesso, false caso contrário
      */
     fun reboot(): Boolean {
-        if (!isDeviceAdminActive()) {
-            Log.w(TAG, "Device Admin não está ativo. Não é possível reiniciar.")
-            return false
+        Log.d(TAG, "Tentando reiniciar dispositivo...")
+        
+        // Método 1: DevicePolicyManager.reboot() (requer Device Admin e API 24+)
+        if (isDeviceAdminActive() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                Log.d(TAG, "Tentando reiniciar via DevicePolicyManager...")
+                devicePolicyManager?.reboot(deviceAdminComponent)
+                Log.d(TAG, "✅ Comando de reiniciar enviado via DevicePolicyManager")
+                return true
+            } catch (e: SecurityException) {
+                Log.w(TAG, "DevicePolicyManager.reboot() falhou por segurança: ${e.message}")
+            } catch (e: Exception) {
+                Log.w(TAG, "DevicePolicyManager.reboot() falhou: ${e.message}")
+            }
+        } else {
+            if (!isDeviceAdminActive()) {
+                Log.w(TAG, "Device Admin não está ativo")
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                Log.w(TAG, "API level ${Build.VERSION.SDK_INT} é muito antigo para DevicePolicyManager.reboot()")
+            }
         }
         
+        // Método 2: PowerManager.reboot() (requer permissão REBOOT - apenas para apps de sistema)
+        // Nota: Este método geralmente não funciona em apps normais, apenas em apps de sistema
         try {
-            Log.d(TAG, "Reiniciando dispositivo...")
-            
-            // Tenta usar DevicePolicyManager.reboot() (requer API 24+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                devicePolicyManager?.reboot(deviceAdminComponent)
-                Log.d(TAG, "Comando de reiniciar enviado via DevicePolicyManager")
-                return true
-            } else {
-                // Para versões antigas, tenta usar PowerManager (requer permissão REBOOT)
-                Log.w(TAG, "API level muito antigo. Reiniciar pode não funcionar.")
-                return false
+            Log.d(TAG, "Tentando reiniciar via PowerManager...")
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            if (powerManager != null) {
+                // PowerManager.reboot() requer app de sistema ou permissão especial
+                // Na maioria dos casos, isso não funcionará em apps normais
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    powerManager.reboot(null)
+                    Log.d(TAG, "✅ Comando de reiniciar enviado via PowerManager")
+                    return true
+                }
             }
         } catch (e: SecurityException) {
-            Log.e(TAG, "Sem permissão para reiniciar: ${e.message}", e)
-            return false
+            Log.w(TAG, "PowerManager.reboot() falhou por segurança (esperado em apps normais): ${e.message}")
+        } catch (e: NoSuchMethodError) {
+            Log.w(TAG, "PowerManager.reboot() não disponível nesta versão do Android")
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao reiniciar: ${e.message}", e)
-            return false
+            Log.w(TAG, "PowerManager.reboot() falhou: ${e.message}")
         }
+        
+        // Método 3: Runtime.exec com su (requer root)
+        try {
+            Log.d(TAG, "Tentando reiniciar via su (requer root)...")
+            val process = Runtime.getRuntime().exec("su -c reboot")
+            process.waitFor()
+            if (process.exitValue() == 0) {
+                Log.d(TAG, "✅ Comando de reiniciar enviado via su")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Runtime.exec('su -c reboot') falhou (dispositivo pode não ter root): ${e.message}")
+        }
+        
+        // Método 4: Runtime.exec com reboot direto (pode funcionar em alguns dispositivos)
+        try {
+            Log.d(TAG, "Tentando reiniciar via Runtime.exec('reboot')...")
+            val process = Runtime.getRuntime().exec("reboot")
+            process.waitFor()
+            if (process.exitValue() == 0) {
+                Log.d(TAG, "✅ Comando de reiniciar enviado via Runtime.exec")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Runtime.exec('reboot') falhou: ${e.message}")
+        }
+        
+        Log.e(TAG, "❌ Todos os métodos de reiniciar falharam. Verifique:")
+        Log.e(TAG, "  1. Device Admin está ativo? ${isDeviceAdminActive()}")
+        Log.e(TAG, "  2. Permissões de reboot no device_admin.xml estão corretas?")
+        Log.e(TAG, "  3. Dispositivo tem root? (para métodos alternativos)")
+        return false
     }
     
     companion object {
