@@ -1,0 +1,136 @@
+# 🏦 Sistema de Leitura de Extratos Bancários
+
+Um sistema completo para leitura, processamento e análise de extratos bancários em PDF, com classificação automática por data e tipo de transferência.
+
+## ✨ Funcionalidades
+
+- **Leitura de PDF**: Extrai texto de extratos bancários em PDF
+- **Classificação Automática**: Identifica automaticamente tipos de transação (PIX, TED, DOC, Débito, Crédito, etc.)
+- **Organização por Data**: Agrupa transações por data
+- **Interface Web**: Interface amigável com Streamlit
+- **Análise Gráfica**: Gráficos interativos para visualização dos dados
+- **Exportação**: Gera relatórios em PDF e Excel
+- **Filtros Avançados**: Filtre transações por tipo, data e direção
+
+## 🚀 Instalação
+
+1. **Clone o repositório**:
+```bash
+git clone <url-do-repositorio>
+cd mrit-orion
+```
+
+2. **Instale as dependências**:
+```bash
+pip install -r requirements.txt
+```
+
+## 📖 Como Usar
+
+### Interface Web (Recomendado)
+
+1. **Execute a interface web**:
+```bash
+streamlit run interface_streamlit.py
+```
+
+2. **Acesse no navegador**: `http://localhost:8501`
+
+3. **Faça upload do PDF** do extrato bancário
+
+4. **Visualize e analise** os dados através das abas:
+   - **Resumo**: Métricas principais
+   - **Gráficos**: Visualizações interativas
+   - **Transações**: Tabela detalhada com filtros
+   - **Exportar**: Baixar relatórios em PDF/Excel
+
+### Uso via Código
+
+```python
+from extrato_reader import ExtratoBancarioReader
+
+# Criar instância do leitor
+reader = ExtratoBancarioReader()
+
+# Processar extrato
+df = reader.processar_extrato("caminho/para/extrato.pdf")
+
+# Ver transações
+print(df.head())
+
+# Agrupar por data
+por_data = reader.agrupar_por_data(df)
+
+# Agrupar por tipo
+por_tipo = reader.agrupar_por_tipo(df)
+
+# Gerar relatório
+relatorio = reader.gerar_relatorio(df)
+```
+
+## 🔧 Tipos de Transação Suportados
+
+O sistema identifica automaticamente os seguintes tipos:
+
+- **PIX**: Transferências instantâneas
+- **TED**: Transferência Eletrônica Disponível
+- **DOC**: Documento de Ordem de Crédito
+- **DÉBITO**: Saques, compras no débito
+- **CRÉDITO**: Depósitos, transferências recebidas
+- **TARIFA**: Taxas bancárias
+- **JUROS**: Rendimentos, juros
+- **SALDO**: Saldos anteriores/atuais
+- **OUTROS**: Transações não classificadas
+
+## 📊 Formatos de Data Suportados
+
+- DD/MM/YYYY (ex: 15/12/2023)
+- DD-MM-YYYY (ex: 15-12-2023)
+- YYYY-MM-DD (ex: 2023-12-15)
+- DD.MM.YYYY (ex: 15.12.2023)
+
+## 📁 Estrutura do Projeto
+
+```
+mrit-orion/
+├── extrato_reader.py      # Classe principal para leitura de PDFs
+├── interface_streamlit.py # Interface web com Streamlit
+├── requirements.txt       # Dependências do projeto
+└── README.md             # Este arquivo
+```
+
+## 🛠️ Dependências
+
+- **PyPDF2**: Leitura básica de PDFs
+- **pdfplumber**: Extração avançada de texto
+- **pandas**: Manipulação de dados
+- **streamlit**: Interface web
+- **plotly**: Gráficos interativos
+- **reportlab**: Geração de PDFs
+- **openpyxl**: Exportação para Excel
+
+## ⚠️ Limitações
+
+- Funciona melhor com PDFs de extratos bancários brasileiros
+- A precisão da classificação depende da qualidade do texto extraído
+- PDFs escaneados podem ter menor precisão (recomenda-se OCR prévio)
+
+## 🤝 Contribuição
+
+1. Faça um fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+
+## 📞 Suporte
+
+Para dúvidas ou problemas, abra uma issue no repositório ou entre em contato.
+
+---
+
+**Desenvolvido com ❤️ para facilitar a análise de extratos bancários**

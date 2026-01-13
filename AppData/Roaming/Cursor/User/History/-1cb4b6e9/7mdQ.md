@@ -1,0 +1,282 @@
+# 🔄 Guia de Atualização - No Azul
+
+## 📋 Para Usuários que JÁ têm o No Azul instalado
+
+### ⚠️ **IMPORTANTE: Seus dados serão preservados!**
+
+Este guia garante que você **não perca nenhum dado** ao atualizar.
+
+---
+
+## 🎯 Métodos de Atualização
+
+### **Método 1: Atualização Automática (RECOMENDADO)**
+
+#### Passo a Passo:
+
+1. **📥 Baixe a nova versão**
+   - Baixe o arquivo `NoAzul.exe` (nova versão)
+   - Baixe também o `atualizacao.py`
+
+2. **🔒 Feche o aplicativo** (se estiver aberto)
+
+3. **▶️ Execute o script de atualização**
+   ```bash
+   python atualizacao.py
+   ```
+
+4. **✅ Siga as instruções na tela**
+   - O script fará backup dos seus dados
+   - Pedirá para copiar os novos arquivos
+   - Restaurará seus dados automaticamente
+
+5. **🎉 Pronto!**
+   - Seus dados foram preservados
+   - Nova versão instalada
+   - Execute o NoAzul.exe normalmente
+
+---
+
+### **Método 2: Atualização Manual (Simples)**
+
+#### Passo a Passo:
+
+1. **📂 Localize sua pasta de instalação**
+   - Normalmente em: `C:\Users\SeuNome\AppData\Local\Programs\No Azul\`
+   - Ou onde você instalou
+
+2. **💾 FAÇA BACKUP dos arquivos importantes:**
+   - ✅ `data.json` (seus dados financeiros)
+   - ✅ `senha.json` (sua senha, se tiver)
+   - ✅ `config.json` (suas configurações)
+   - ✅ Pasta `backups/` (todos os backups)
+   - ✅ Pasta `logs/` (opcional, mas recomendado)
+
+   **Como fazer:**
+   ```
+   Copie estes arquivos para uma pasta segura
+   (ex: Desktop/Backup_NoAzul)
+   ```
+
+3. **📥 Copie a nova versão**
+   - Copie o novo `NoAzul.exe` para a pasta de instalação
+   - **SOBRESCREVA** o arquivo antigo quando perguntado
+
+4. **♻️ RESTAURE seus dados**
+   - Copie de volta os arquivos que você salvou no passo 2
+   - Cole na pasta de instalação
+   - **NÃO sobrescreva** se perguntado (mantenha os dados antigos)
+
+5. **✅ Execute o aplicativo**
+   - Seus dados estarão lá!
+   - Novas funcionalidades disponíveis!
+
+---
+
+### **Método 3: Atualização Copiar por Cima**
+
+Se você não quer complicar:
+
+1. **💾 Backup dos dados (ESSENCIAL!)**
+   ```
+   Copie para uma pasta segura:
+   - data.json
+   - senha.json
+   - config.json
+   - backups/
+   ```
+
+2. **📥 Baixe a nova versão**
+
+3. **📂 Substitua o executável**
+   - Copie o novo NoAzul.exe
+   - Cole na pasta onde está o antigo
+   - Clique "Substituir" quando perguntado
+
+4. **✅ Execute**
+   - Seus dados devem estar intactos
+   - Se algo der errado, você tem o backup!
+
+---
+
+## 🛡️ Garantia de Segurança
+
+### Seus dados estão seguros se você:
+
+1. ✅ **Fez backup** dos arquivos .json
+2. ✅ **Não apagou** a pasta de instalação toda
+3. ✅ **Apenas substituiu** o executável
+
+### O que NUNCA fazer:
+
+- ❌ **NÃO apague** a pasta inteira sem backup
+- ❌ **NÃO desinstale** sem salvar os dados
+- ❌ **NÃO sobrescreva** os arquivos .json com versões vazias
+
+---
+
+## 📊 Checklist de Atualização
+
+### Antes:
+- [ ] Fiz backup de `data.json`
+- [ ] Fiz backup de `senha.json`
+- [ ] Fiz backup de `config.json`
+- [ ] Fechei o aplicativo
+- [ ] Tenho a nova versão baixada
+
+### Durante:
+- [ ] Copiei o novo executável
+- [ ] Mantive meus arquivos de dados
+- [ ] Não apaguei backups
+
+### Depois:
+- [ ] Executei o novo NoAzul.exe
+- [ ] Meus dados aparecem normalmente
+- [ ] Consigo fazer login (se tinha senha)
+- [ ] Novas funcionalidades funcionam
+
+---
+
+## 🎁 Novidades da Versão 2.0
+
+Após atualizar, você terá:
+
+### ✨ Melhorias de Qualidade:
+- ✅ **Logging profissional** - Rastreamento de erros
+- ✅ **Validação robusta** - Dados sempre corretos
+- ✅ **40+ testes** - Sistema mais confiável
+- ✅ **Sistema de cache** - Interface mais rápida
+
+### 📱 Interface Responsiva:
+- ✅ **Notebooks otimizados** - Perfeito para telas pequenas
+- ✅ **Detecção automática** - Adapta ao seu monitor
+- ✅ **Popups ajustados** - Sempre cabem na tela
+- ✅ **Fontes adaptativas** - Legíveis em qualquer tela
+
+### 📊 Novos Recursos:
+- ✅ **Exportação CSV** - Relatórios para Excel
+- ✅ **Backups otimizados** - Mantém apenas 30 mais recentes
+- ✅ **Logs de sistema** - Para suporte técnico
+- ✅ **Melhor performance** - 2-3x mais rápido
+
+---
+
+## 🆘 Problemas na Atualização?
+
+### "Meus dados sumiram!"
+
+**Solução:**
+1. Verifique a pasta de instalação
+2. Procure por `data.json`
+3. Se não estiver lá, copie do seu backup
+4. Execute o aplicativo novamente
+
+### "Não consigo fazer login!"
+
+**Solução:**
+1. Verifique se `senha.json` está na pasta
+2. Se não estiver, copie do backup
+3. Se perdeu o backup, delete `senha.json` e crie uma nova senha
+
+### "Erro ao abrir o aplicativo"
+
+**Solução:**
+1. Verifique se baixou a versão correta (Windows 64-bit)
+2. Execute como Administrador
+3. Verifique se o antivírus não está bloqueando
+4. Consulte os logs em: `logs/noazul_YYYYMM.log`
+
+### "Dados em formato antigo"
+
+**Solução:**
+O sistema migra automaticamente! Se der erro:
+1. Execute: `python atualizacao.py`
+2. Ele fará a migração dos dados
+3. Backup automático da versão antiga
+
+---
+
+## 📞 Suporte
+
+### Precisa de ajuda?
+
+- **📧 Email:** matheus@mrit.com.br
+- **📱 WhatsApp:** (19) 97134-9642
+- **🌐 Site:** www.mrit.com.br
+
+### Ao pedir suporte, tenha em mãos:
+1. Arquivo `logs/noazul_YYYYMM.log`
+2. Sua versão anterior (se souber)
+3. Descrição do problema
+
+---
+
+## 💡 Dicas Importantes
+
+### Antes de Atualizar:
+1. **Sempre faça backup** dos dados
+2. **Feche o aplicativo** completamente
+3. **Leia as novidades** da versão
+
+### Durante a Atualização:
+1. **Mantenha a calma** - é rápido!
+2. **Siga o passo a passo** - não pule etapas
+3. **Não interrompa** o processo
+
+### Após Atualizar:
+1. **Teste suas funcionalidades** principais
+2. **Verifique seus dados** (estão lá!)
+3. **Explore as novidades** da versão 2.0
+
+---
+
+## 📈 Histórico de Versões
+
+### Versão 2.0.0 (Atual)
+- ✅ Sistema de logging
+- ✅ Validação robusta
+- ✅ Interface responsiva
+- ✅ Testes automatizados
+- ✅ Exportação de relatórios
+- ✅ Cache de performance
+
+### Versão 1.0.0 (Inicial)
+- Interface básica
+- Funcionalidades principais
+- Sistema de metas
+- Projeções
+
+---
+
+## 🎯 Resumo Rápido
+
+### Para atualizar SEM perder dados:
+
+1. **Backup:** Copie `data.json`, `senha.json`, `config.json`
+2. **Substitua:** Copie novo NoAzul.exe para pasta de instalação
+3. **Execute:** Abra o aplicativo
+4. **Pronto:** Seus dados estão lá!
+
+**Tempo total: 2-3 minutos**
+
+---
+
+## ✅ Confirmação
+
+Após atualizar com sucesso, você verá:
+
+```
+✅ Seus dados financeiros (mesmos de antes)
+✅ Suas configurações (mesmas de antes)
+✅ Seus backups (todos preservados)
+✅ + Novas funcionalidades da v2.0!
+```
+
+---
+
+**🎉 Aproveite a nova versão do No Azul! 🎉**
+
+---
+
+**Desenvolvido com ❤️ por MRIT Software © 2025**
+

@@ -1,0 +1,166 @@
+# Sistema de Cupons com QR Code
+
+Este sistema permite criar e gerenciar cupons com QR Code para promoções.
+
+## 📁 Estrutura de Arquivos
+
+```
+public/promos/
+├── promo_qr.html      # Página de criação de cupons
+├── promo_show.html    # Página pública da promoção
+├── config.js          # Configuração do Supabase
+└── README.md          # Este arquivo
+```
+
+## 🚀 Configuração
+
+### 1. Configurar Supabase
+
+1. **Criar tabela `promo`:**
+   ```sql
+   -- Execute o script em database/create_promo_table.sql
+   ```
+
+2. **Criar bucket `promos` no Storage:**
+   - Acesse o painel do Supabase
+   - Vá em Storage > Create bucket
+   - Nome: `promos`
+   - Público: Sim
+
+3. **Configurar credenciais:**
+   - Edite `config.js`
+   - Substitua `your-project.supabase.co` pela URL do seu projeto
+   - Substitua `your-anon-key` pela chave anônima do seu projeto
+
+### 2. Configurar Políticas RLS (Row Level Security)
+
+```sql
+-- Habilitar RLS na tabela promo
+ALTER TABLE promo ENABLE ROW LEVEL SECURITY;
+
+-- Política para leitura pública (necessário para promo_show.html)
+CREATE POLICY "Promoções são públicas para leitura" ON promo
+    FOR SELECT USING (true);
+
+-- Política para inserção (apenas usuários autenticados)
+CREATE POLICY "Usuários autenticados podem criar promoções" ON promo
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+```
+
+### 3. Configurar Storage
+
+```sql
+-- Política para upload de imagens QR
+CREATE POLICY "Upload de QR codes" ON storage.objects
+    FOR INSERT WITH CHECK (bucket_id = 'promos');
+
+-- Política para leitura pública de QR codes
+CREATE POLICY "QR codes são públicos" ON storage.objects
+    FOR SELECT USING (bucket_id = 'promos');
+```
+
+## 🎯 Como Usar
+
+### 1. Criar Cupom
+1. Acesse `/promos/promo_qr.html`
+2. Preencha o formulário:
+   - **Código do Cupom** (opcional - gerado automaticamente se vazio)
+3. Clique em "Gerar Cupom"
+4. O sistema irá:
+   - Gerar ID único da promoção
+   - Criar link público
+   - Gerar QR Code
+   - Fazer upload da imagem para o Supabase
+   - Salvar no banco de dados
+
+### 2. Visualizar Cupom
+1. Acesse o link público gerado
+2. A página `promo_show.html` será carregada
+3. Mostra:
+   - Código da promoção em destaque
+   - QR Code
+   - Opções de download
+
+### 3. Integração com Painel
+- O botão "QR Code" na página de Anúncios abre a página de criação
+- Funciona em nova aba para não interromper o fluxo principal
+
+## 🎨 Recursos
+
+### Página de Criação (promo_qr.html)
+- ✅ Formulário intuitivo
+- ✅ Geração automática de QR Code
+- ✅ Upload automático para Supabase Storage
+- ✅ Preview visual do cupom
+- ✅ Download em PNG (normal e TV 40")
+- ✅ Links copiáveis
+- ✅ Design responsivo
+
+### Página Pública (promo_show.html)
+- ✅ Design otimizado para mobile
+- ✅ Carregamento automático da promoção
+- ✅ QR Code funcional
+- ✅ Download de imagens
+- ✅ Opção de download automático
+- ✅ Tratamento de erros
+
+## 🔧 Personalização
+
+### Cores e Estilo
+- Edite as variáveis CSS nas páginas HTML
+- Gradientes principais: `#667eea` → `#764ba2`
+- Cores de destaque: `#28a745` (sucesso), `#dc3545` (erro)
+
+### Funcionalidades
+- Adicione campos personalizados na tabela `promo`
+- Modifique o formulário em `promo_qr.html`
+- Ajuste a exibição em `promo_show.html`
+
+## 🐛 Troubleshooting
+
+### Problemas Comuns
+
+1. **"Promoção não encontrada"**
+   - Verifique se a tabela `promo` existe
+   - Confirme as políticas RLS
+   - Verifique se o ID da promoção está correto
+
+2. **Erro ao fazer upload da imagem**
+   - Verifique se o bucket `promos` existe
+   - Confirme as políticas de Storage
+   - Verifique as credenciais do Supabase
+
+3. **QR Code não aparece**
+   - Verifique se a biblioteca QRCode está carregada
+   - Confirme se o link público está correto
+
+### Logs de Debug
+- Abra o Console do navegador (F12)
+- Verifique erros de JavaScript
+- Confirme requisições para o Supabase
+
+## 📱 Responsividade
+
+- ✅ Mobile first
+- ✅ Breakpoints: 768px, 1024px
+- ✅ Layout adaptativo
+- ✅ Botões touch-friendly
+- ✅ Texto legível em todas as telas
+
+## 🔒 Segurança
+
+- ✅ RLS habilitado na tabela `promo`
+- ✅ Políticas de Storage configuradas
+- ✅ Validação de dados no frontend
+- ✅ Sanitização de inputs
+- ✅ Tratamento de erros
+
+## 🚀 Próximos Passos
+
+- [ ] Adicionar autenticação na página de criação
+- [ ] Implementar edição de cupons existentes
+- [ ] Adicionar estatísticas de uso
+- [ ] Criar templates de cupons
+- [ ] Implementar expiração de cupons
+- [ ] Adicionar códigos de barras
+- [ ] Integrar com sistema de notificações

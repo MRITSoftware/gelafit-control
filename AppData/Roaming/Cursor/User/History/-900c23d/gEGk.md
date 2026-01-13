@@ -1,0 +1,198 @@
+# 🚀 Guia de Instalação Rápida
+
+## Passo a Passo Completo
+
+### 1️⃣ Instalar Dependências (5 minutos)
+
+Abra o terminal na pasta do projeto e execute:
+
+```bash
+npm install
+```
+
+Aguarde a instalação de todas as dependências.
+
+### 2️⃣ Configurar Supabase (10 minutos)
+
+#### A. Criar Bucket de Storage
+
+1. Acesse: https://supabase.com/dashboard
+2. Selecione seu projeto
+3. Menu lateral: **Storage**
+4. Clique: **New bucket**
+5. Nome: `documents`
+6. Tipo: **Private** ✅
+7. Clique: **Create bucket**
+
+#### B. Configurar Políticas do Bucket
+
+1. Clique no bucket `documents`
+2. Vá na aba **Policies**
+3. Clique em **New Policy**
+4. Selecione **For full customization**
+
+**Copie e cole cada política abaixo:**
+
+```sql
+-- Política 1: Upload (INSERT)
+CREATE POLICY "Allow authenticated uploads"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'documents');
+
+-- Política 2: Download (SELECT)
+CREATE POLICY "Allow authenticated downloads"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (bucket_id = 'documents');
+
+-- Política 3: Atualizar (UPDATE)
+CREATE POLICY "Allow team and admin updates"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'documents' AND
+  EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'team')
+  )
+);
+
+-- Política 4: Deletar (DELETE)
+CREATE POLICY "Allow admin deletes"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'documents' AND
+  EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  )
+);
+```
+
+#### C. Criar Tabelas do Banco
+
+1. Menu lateral: **SQL Editor**
+2. Clique: **New query**
+3. Copie TODO o conteúdo do arquivo `supabase-setup.sql`
+4. Cole no editor
+5. Clique: **Run** ▶️
+6. Aguarde a mensagem de sucesso ✅
+
+### 3️⃣ Criar Primeiro Usuário Admin (3 minutos)
+
+#### A. Criar o Usuário
+
+1. Menu lateral: **Authentication** → **Users**
+2. Clique: **Add user** → **Create new user**
+3. Preencha:
+   - **Email**: seu-email@exemplo.com
+   - **Password**: MinimaSenha123! (mínimo 6 caracteres)
+   - ✅ Marque: **Auto Confirm User**
+4. Clique: **Create user**
+
+#### B. Definir como Admin
+
+1. Volte para **SQL Editor**
+2. Execute este comando (substitua o email):
+
+```sql
+UPDATE public.profiles 
+SET role = 'admin', full_name = 'Administrador'
+WHERE email = 'seu-email@exemplo.com';
+```
+
+3. Clique: **Run** ▶️
+
+### 4️⃣ Verificar Configuração do .env.local (1 minuto)
+
+Verifique se existe o arquivo `.env.local` na raiz do projeto com:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://base3.muraltv.com.br
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlMiIsImlhdCI6MTc0OTc4NjAwMCwiZXhwIjoxOTE3NTUyNDAwfQ.MYmpgQo5ODwqR4Ihv8Fbwn4t2Ev7LR3fud7GpWWrXbU
+```
+
+Se não existir, crie manualmente.
+
+### 5️⃣ Iniciar o Servidor (1 minuto)
+
+```bash
+npm run dev
+```
+
+Aguarde a mensagem:
+```
+✓ Ready in Xms
+  ○ Local:   http://localhost:3000
+```
+
+### 6️⃣ Acessar o Sistema
+
+1. Abra o navegador: http://localhost:3000
+2. Faça login com o email e senha do admin
+3. 🎉 Pronto! Você está no dashboard administrativo
+
+## ✅ Checklist Rápida
+
+Use este checklist para garantir que tudo está configurado:
+
+- [ ] `npm install` executado com sucesso
+- [ ] Bucket `documents` criado no Supabase Storage
+- [ ] 4 políticas de storage configuradas
+- [ ] Script SQL `supabase-setup.sql` executado
+- [ ] Primeiro usuário criado no Authentication
+- [ ] Role 'admin' atribuído ao usuário
+- [ ] Arquivo `.env.local` existe e está correto
+- [ ] `npm run dev` rodando sem erros
+- [ ] Login funcionando em http://localhost:3000
+
+## 🎯 Próximos Passos
+
+Após o login como admin:
+
+1. **Criar usuários da equipe:**
+   - Menu: Usuários → Novo Usuário
+   - Role: Equipe
+
+2. **Criar clientes:**
+   - Menu: Usuários → Novo Usuário
+   - Role: Cliente
+
+3. **Testar o fluxo completo:**
+   - Faça logout
+   - Login como cliente
+   - Envie um documento PDF
+   - Logout e login como equipe
+   - Visualize e gerencie o documento
+
+## 🆘 Problemas Comuns
+
+### Erro: "Invalid bucket"
+- ✅ Verifique se o bucket `documents` foi criado
+- ✅ Confirme que o nome está correto (minúsculas)
+
+### Erro: "RLS policy violation"
+- ✅ Execute o script SQL completo novamente
+- ✅ Verifique se as políticas de storage foram criadas
+
+### Erro: "Cannot read properties of null"
+- ✅ Confirme que o usuário tem um perfil na tabela `profiles`
+- ✅ Execute o UPDATE para definir o role como 'admin'
+
+### Não consigo fazer login
+- ✅ Verifique se marcou "Auto Confirm User" ao criar o usuário
+- ✅ Confirme que a senha tem pelo menos 6 caracteres
+- ✅ Tente resetar a senha no dashboard do Supabase
+
+## 📞 Precisa de Ajuda?
+
+1. Verifique o arquivo `README.md` para documentação completa
+2. Consulte os logs no console do navegador (F12)
+3. Revise a documentação do Supabase: https://supabase.com/docs
+
+---
+
+**Tempo total estimado: ~20 minutos** ⏱️
+

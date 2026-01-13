@@ -1,0 +1,199 @@
+# MRIT Orion - Sistema de Automação Contábil
+
+Sistema inteligente para automação de lançamentos contábeis a partir de extratos bancários, transformando movimentações financeiras em registros estruturados prontos para exportação.
+
+## 🚀 Funcionalidades
+
+### ✅ Implementadas
+- **Autenticação**: Sistema de login com Supabase
+- **Upload de Extratos**: Suporte para PDF, OFX, CSV e Excel
+- **Processamento de PDFs**: OCR com Tesseract.js para extrair dados de extratos bancários
+- **Sistema de Fila**: Processamento de até 5 PDFs simultaneamente
+- **Conversão para Excel**: Geração automática de planilhas com separação por tipo e método
+- **Detecção de Métodos**: Identificação automática de PIX, TED, DOC, transferências, boletos e cartões
+- **Preview em Tempo Real**: Visualização dos dados processados antes do download
+- **Processamento Automático**: Conversão de extratos em transações estruturadas
+- **Classificação Inteligente**: Motor de classificação automática com regras padrão
+- **Interface Responsiva**: Dashboard moderno e intuitivo
+- **Multi-empresa**: Suporte para múltiplas empresas por usuário
+
+### 🔄 Em Desenvolvimento
+- **Revisão Manual**: Interface para classificar transações pendentes
+- **Conciliação Bancária**: Comparação de saldos contábeis vs bancários
+- **Exportação**: Geração de arquivos para softwares contábeis
+- **Regras Personalizadas**: Criação de regras de classificação customizadas
+- **Relatórios**: Dashboards analíticos e relatórios de divergências
+- **Auditoria**: Histórico completo de alterações
+
+## 🛠️ Tecnologias
+
+- **Frontend**: Next.js 14, React 18, TypeScript
+- **Styling**: Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **Processamento**: Bibliotecas para OFX, CSV e Excel
+- **Deploy**: Aplicação local com Supabase remoto
+
+## 📋 Pré-requisitos
+
+- Node.js 18+ 
+- npm ou yarn
+- Conta no Supabase (já configurada)
+
+## 🚀 Instalação
+
+1. **Clone o repositório**
+```bash
+git clone <url-do-repositorio>
+cd mrit-orion
+```
+
+2. **Instale as dependências**
+```bash
+npm install
+```
+
+3. **Configure o banco de dados**
+   - Acesse o Supabase Dashboard
+   - Execute o script SQL em `database/schema.sql`
+   - Isso criará todas as tabelas e políticas de segurança necessárias
+
+4. **Execute o projeto**
+```bash
+npm run dev
+```
+
+5. **Acesse a aplicação**
+   - Abra [http://localhost:3000](http://localhost:3000)
+   - Crie uma conta ou faça login
+
+## 📊 Estrutura do Banco de Dados
+
+### Tabelas Principais
+- **empresas**: Dados das empresas clientes
+- **extratos**: Extratos bancários importados
+- **transacoes**: Transações individuais processadas
+- **planos_contas**: Planos de contas por empresa
+- **regras_classificacao**: Regras personalizadas de classificação
+- **auditoria**: Log de todas as alterações
+
+### Políticas de Segurança (RLS)
+- Cada usuário só acessa dados de suas próprias empresas
+- Isolamento completo entre diferentes usuários
+- Auditoria automática de todas as operações
+
+## 🔧 Como Usar
+
+### 1. Primeiro Acesso
+1. Crie uma conta no sistema
+2. Adicione uma empresa (CNPJ, razão social)
+3. Configure o plano de contas da empresa
+
+### 2. Importar Extratos
+1. Acesse "Upload de Extratos"
+2. Selecione a empresa
+3. Faça upload do arquivo (OFX, CSV ou Excel)
+4. O sistema processará automaticamente
+
+### 3. Classificar Transações
+1. Transações são classificadas automaticamente
+2. Revise as classificações pendentes
+3. Ajuste conforme necessário
+4. O sistema aprende com suas correções
+
+### 4. Conciliação
+1. Compare saldos contábeis vs bancários
+2. Identifique divergências
+3. Gere relatórios de conciliação
+
+## 📁 Estrutura do Projeto
+
+```
+mrit-orion/
+├── app/                    # Páginas Next.js
+│   ├── dashboard/         # Dashboard principal
+│   ├── upload/           # Upload de extratos
+│   └── globals.css       # Estilos globais
+├── components/           # Componentes React
+│   └── FileUpload.tsx   # Componente de upload
+├── lib/                 # Utilitários e configurações
+│   ├── supabase.ts     # Configuração Supabase
+│   ├── auth.ts         # Funções de autenticação
+│   ├── fileProcessors.ts # Processadores de arquivo
+│   └── classificationEngine.ts # Motor de classificação
+├── database/            # Scripts de banco
+│   └── schema.sql      # Schema completo
+└── README.md           # Este arquivo
+```
+
+## 🔍 Formatos Suportados
+
+### OFX (Open Financial Exchange)
+- Formato padrão bancário
+- Suporte completo a transações e saldos
+- Reconhecimento automático de bancos
+
+### CSV
+- Formatos brasileiros e internacionais
+- Detecção automática de colunas
+- Suporte a diferentes separadores
+
+### Excel (.xls, .xlsx)
+- Planilhas com dados de extratos
+- Detecção automática de estrutura
+- Suporte a múltiplas abas
+
+## 🧠 Motor de Classificação
+
+### Regras Padrão Incluídas
+- **PIX**: Recebimentos e pagamentos
+- **Transferências**: Entre contas
+- **Tarifas**: Taxas bancárias
+- **Impostos**: IR, PIS, COFINS, ICMS
+- **Utilidades**: Energia, água, internet
+- **Folha**: Salários e encargos
+- **Vendas**: Receitas e faturamento
+- **Investimentos**: Aplicações e resgates
+
+### Aprendizado Automático
+- Sistema aprende com classificações manuais
+- Cria regras personalizadas automaticamente
+- Melhora precisão com o uso contínuo
+
+## 🔒 Segurança
+
+- **Autenticação**: Supabase Auth com JWT
+- **Autorização**: Row Level Security (RLS)
+- **Auditoria**: Log completo de alterações
+- **Isolamento**: Dados isolados por usuário
+- **Criptografia**: Dados criptografados em trânsito
+
+## 🚀 Próximos Passos
+
+1. **Implementar revisão manual de transações**
+2. **Adicionar conciliação bancária**
+3. **Criar sistema de exportação**
+4. **Desenvolver relatórios analíticos**
+5. **Implementar notificações**
+6. **Adicionar backup automático**
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch para sua feature
+3. Commit suas mudanças
+4. Push para a branch
+5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
+
+## 📞 Suporte
+
+Para dúvidas ou suporte, entre em contato através dos issues do GitHub.
+
+---
+
+**MRIT Orion** - Transformando a contabilidade com inteligência artificial 🚀
+
+
