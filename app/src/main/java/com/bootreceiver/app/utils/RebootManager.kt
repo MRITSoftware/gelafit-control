@@ -62,26 +62,42 @@ class RebootManager(private val context: Context) {
      * @return true se o comando foi enviado com sucesso, false caso contrário
      */
     fun reboot(): Boolean {
-        Log.d(TAG, "Tentando reiniciar dispositivo...")
+        Log.d(TAG, "🔄 ========== INICIANDO TENTATIVA DE REBOOT ==========")
+        Log.d(TAG, "Device Admin ativo: ${isDeviceAdminActive()}")
+        Log.d(TAG, "API Level: ${Build.VERSION.SDK_INT} (N = ${Build.VERSION_CODES.N})")
+        Log.d(TAG, "Device Admin Component: $deviceAdminComponent")
         
         // Método 1: DevicePolicyManager.reboot() (requer Device Admin e API 24+)
         if (isDeviceAdminActive() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
-                Log.d(TAG, "Tentando reiniciar via DevicePolicyManager...")
+                Log.d(TAG, "🔧 Método 1: Tentando reiniciar via DevicePolicyManager.reboot()...")
+                Log.d(TAG, "   DevicePolicyManager: ${devicePolicyManager != null}")
+                Log.d(TAG, "   DeviceAdminComponent: $deviceAdminComponent")
+                
                 devicePolicyManager?.reboot(deviceAdminComponent)
-                Log.d(TAG, "✅ Comando de reiniciar enviado via DevicePolicyManager")
+                
+                // Se chegou aqui sem exceção, o comando foi enviado
+                Log.d(TAG, "✅ Comando de reiniciar enviado via DevicePolicyManager.reboot()")
+                Log.d(TAG, "   NOTA: O método não lança exceção, mas pode não funcionar em alguns dispositivos")
+                Log.d(TAG, "   Se o dispositivo não reiniciar, pode ser limitação do fabricante")
                 return true
             } catch (e: SecurityException) {
-                Log.w(TAG, "DevicePolicyManager.reboot() falhou por segurança: ${e.message}")
+                Log.e(TAG, "❌ DevicePolicyManager.reboot() falhou por segurança: ${e.message}")
+                Log.e(TAG, "   Stack trace: ${e.stackTraceToString()}")
+            } catch (e: UnsupportedOperationException) {
+                Log.e(TAG, "❌ DevicePolicyManager.reboot() não suportado: ${e.message}")
+                Log.e(TAG, "   Este dispositivo/fabricante não suporta reboot via DevicePolicyManager")
             } catch (e: Exception) {
-                Log.w(TAG, "DevicePolicyManager.reboot() falhou: ${e.message}")
+                Log.e(TAG, "❌ DevicePolicyManager.reboot() falhou: ${e.message}")
+                Log.e(TAG, "   Exception type: ${e.javaClass.simpleName}")
+                Log.e(TAG, "   Stack trace: ${e.stackTraceToString()}")
             }
         } else {
             if (!isDeviceAdminActive()) {
-                Log.w(TAG, "Device Admin não está ativo")
+                Log.w(TAG, "⚠️ Device Admin não está ativo - método 1 não disponível")
             }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-                Log.w(TAG, "API level ${Build.VERSION.SDK_INT} é muito antigo para DevicePolicyManager.reboot()")
+                Log.w(TAG, "⚠️ API level ${Build.VERSION.SDK_INT} é muito antigo para DevicePolicyManager.reboot()")
             }
         }
         

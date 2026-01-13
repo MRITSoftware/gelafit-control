@@ -33,7 +33,7 @@ class SupabaseManager {
      */
     suspend fun checkRebootCommand(deviceId: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Verificando comando de reiniciar para dispositivo: $deviceId")
+            Log.d(TAG, "🔍 Verificando comando de reiniciar para dispositivo: $deviceId")
             
             val response = client.from("device_commands")
                 .select(columns = Columns.ALL) {
@@ -45,16 +45,19 @@ class SupabaseManager {
                 }
                 .decodeSingle<DeviceCommand>()
             
-            Log.d(TAG, "Comando encontrado: ${response.id}")
+            Log.d(TAG, "✅ Comando encontrado! ID: ${response.id}, Command: ${response.command}, Executed: ${response.executed}")
+            Log.d(TAG, "   Device ID: ${response.device_id}, Created: ${response.created_at}")
             true
         } catch (e: Exception) {
             // Se não encontrar nenhum comando, retorna false
             if (e.message?.contains("No rows") == true || 
-                e.message?.contains("not found") == true) {
-                Log.d(TAG, "Nenhum comando de reiniciar pendente")
+                e.message?.contains("not found") == true ||
+                e.message?.contains("No value") == true) {
+                Log.d(TAG, "ℹ️ Nenhum comando de reiniciar pendente para device_id: $deviceId")
                 false
             } else {
-                Log.e(TAG, "Erro ao verificar comando: ${e.message}", e)
+                Log.e(TAG, "❌ Erro ao verificar comando: ${e.message}", e)
+                Log.e(TAG, "   Exception type: ${e.javaClass.simpleName}")
                 false
             }
         }
