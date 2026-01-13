@@ -59,9 +59,39 @@ class PreferenceManager(context: Context) {
         prefs.edit().putBoolean(KEY_HAS_SEEN_DEVICE_ID_INFO, hasSeen).apply()
     }
     
+    /**
+     * Verifica se o dispositivo já foi registrado no Supabase
+     */
+    fun isDeviceRegistered(): Boolean {
+        return prefs.getBoolean(KEY_DEVICE_REGISTERED, false)
+    }
+    
+    /**
+     * Marca que o dispositivo foi registrado no Supabase
+     */
+    fun setDeviceRegistered(registered: Boolean) {
+        prefs.edit().putBoolean(KEY_DEVICE_REGISTERED, registered).apply()
+    }
+    
+    /**
+     * Salva o nome da unidade (email)
+     */
+    fun saveUnitName(unitName: String) {
+        prefs.edit().putString(KEY_UNIT_NAME, unitName).apply()
+    }
+    
+    /**
+     * Obtém o nome da unidade salvo
+     */
+    fun getUnitName(): String? {
+        return prefs.getString(KEY_UNIT_NAME, null)
+    }
+    
     companion object {
         private const val PREFS_NAME = "BootReceiverPrefs"
         private const val KEY_TARGET_PACKAGE = "target_package_name"
         private const val KEY_HAS_SEEN_DEVICE_ID_INFO = "has_seen_device_id_info"
+        private const val KEY_DEVICE_REGISTERED = "device_registered"
+        private const val KEY_UNIT_NAME = "unit_name"
     }
 }

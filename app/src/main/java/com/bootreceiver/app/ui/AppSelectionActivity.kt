@@ -52,6 +52,12 @@ class AppSelectionActivity : AppCompatActivity() {
         // Verifica permissões e otimizações
         checkPermissionsAndOptimizations()
         
+        // Verifica se o dispositivo precisa ser registrado
+        if (!preferenceManager.isDeviceRegistered()) {
+            showDeviceRegistrationDialog()
+            return
+        }
+        
         // Se já estiver configurado, fecha esta activity e abre o app configurado
         if (preferenceManager.isConfigured()) {
             Log.d(TAG, "App já configurado. Abrindo app configurado...")
@@ -64,13 +70,105 @@ class AppSelectionActivity : AppCompatActivity() {
             return
         }
         
+        // Configura a UI normalmente
+        setupUI()
+    }
+    
+    /**
+     * Mostra diálogo para registrar o dispositivo com email da unidade
+     */
+    private fun showDeviceRegistrationDialog() {
+        val deviceId = DeviceIdManager.getDeviceId(this)
+        val input = EditText(this)
+        input.hint = "Email da unidade (ex: sala01@empresa.com)"
+        input.inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        
+        AlertDialog.Builder(this)
+            .setTitle("Registro do Dispositivo")
+            .setMessage(
+                "Bem-vindo ao MRIT Control!\n\n" +
+                "Para registrar este dispositivo, informe o email da unidade:\n\n" +
+                "Device ID: $deviceId"
+            )
+            .setView(input)
+            .setPositiveButton("Registrar") { _, _ ->
+                val email = input.text.toString().trim()
+                if (email.isBlank()) {
+                    Toast.makeText(this, "Por favor, informe o email da unidade", Toast.LENGTH_SHORT).show()
+                    showDeviceRegistrationDialog() // Mostra novamente
+                } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    Toast.makeText(this, "Por favor, informe um email válido", Toast.LENGTH_SHORT).show()
+                    showDeviceRegistrationDialog() // Mostra novamente
+                } else {
+                    registerDevice(deviceId, email)
+                }
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
+    /**
+     * Registra o dispositivo no Supabase
+     */
+    private fun registerDevice(deviceId: String, unitName: String) {
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val supabaseManager = com.bootreceiver.app.utils.SupabaseManager()
+                val success = supabaseManager.registerDevice(deviceId, unitName)
+                
+                if (success) {
+                    // Salva localmente que foi registrado
+                    preferenceManager.setDeviceRegistered(true)
+                    preferenceManager.saveUnitName(unitName)
+                    
+                    Toast.makeText(
+                        this@AppSelectionActivity,
+                        "Dispositivo registrado com sucesso!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    
+                    Log.d(TAG, "Dispositivo registrado: $deviceId com nome: $unitName")
+                    
+                    // Continua com o fluxo normal
+                    setupUI()
+                } else {
+                    Toast.makeText(
+                        this@AppSelectionActivity,
+                        "Erro ao registrar dispositivo. Verifique sua conexão com a internet.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    // Tenta novamente
+                    showDeviceRegistrationDialog()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao registrar dispositivo: ${e.message}", e)
+                Toast.makeText(
+                    this@AppSelectionActivity,
+                    "Erro ao registrar: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+                // Tenta novamente
+                showDeviceRegistrationDialog()
+            }
+        }
+    }
+    
+    /**
+     * Configura a UI após o registro do dispositivo
+     */
+    private fun setupUI() {
         listView = findViewById(R.id.listViewApps)
         searchEditText = findViewById(R.id.searchEditText)
         deviceIdText = findViewById(R.id.deviceIdText)
         
-        // Mostra o Device ID no rodapé
+        // Mostra o Device ID e nome da unidade no rodapé
         val deviceId = DeviceIdManager.getDeviceId(this)
-        deviceIdText.text = "Device ID: $deviceId"
+        val unitName = preferenceManager.getUnitName()
+        deviceIdText.text = if (unitName != null) {
+            "Device ID: $deviceId | Unidade: $unitName"
+        } else {
+            "Device ID: $deviceId"
+        }
         deviceIdText.setOnClickListener {
             showDeviceIdDialog()
         }
@@ -97,11 +195,6 @@ class AppSelectionActivity : AppCompatActivity() {
             showConfirmationDialog(selectedApp)
         }
     }
-    
-    /**
-     * Mostra diálogo com o Device ID e permite copiar
-     */
-    private fun showDeviceIdDialog() {
         val deviceId = DeviceIdManager.getDeviceId(this)
         
         AlertDialog.Builder(this)
