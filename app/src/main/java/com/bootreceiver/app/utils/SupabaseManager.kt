@@ -75,24 +75,76 @@ class SupabaseManager {
         }
         
         try {
-            Log.d(TAG, "📝 Marcando comando $commandId como executado...")
+            Log.d(TAG, "📝 Marcando comando como executado (ID: $commandId)...")
             
+            // Atualiza o campo executed para true e executed_at para agora
             val updateData = mapOf(
                 "executed" to true,
                 "executed_at" to java.time.Instant.now().toString()
             )
             
-            client.from("device_commands")
+            val result = client.from("device_commands")
                 .update(updateData) {
+                    filter {
+                        eq("id", commandId)
+                        eq("executed", false) // Só atualiza se ainda não foi executado
+                    }
+                }
+            
+            // Verifica se realmente atualizou (busca o comando atualizado)
+            try {
+                val updated = client.from("device_commands")
+                    .select(columns = Columns.ALL) {
+                        filter {
+                            eq("id", commandId)
+                        }
+                    }
+                    .decodeSingle<DeviceCommand>()
+                
+                if (updated.executed) {
+                    Log.d(TAG, "✅ Comando marcado como executado com sucesso! (executed_at: ${updated.executed_at})")
+                    return@withContext true
+                } else {
+                    Log.e(TAG, "❌ Comando não foi atualizado! Ainda está como executed=false")
+                    return@withContext false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro ao verificar se comando foi atualizado: ${e.message}", e)
+                // Mesmo assim retorna true porque tentou atualizar
+                return@withContext true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao marcar comando como executado: ${e.message}", e)
+            false
+        }
+    }
+    
+    /**
+     * Deleta um comando específico pelo ID (alternativa à marcação)
+     * 
+     * @param commandId ID do comando
+     * @return true se deletou com sucesso, false caso contrário
+     */
+    suspend fun deleteCommandById(commandId: String?): Boolean = withContext(Dispatchers.IO) {
+        if (commandId == null) {
+            Log.w(TAG, "⚠️ Tentando deletar comando sem ID")
+            return@withContext false
+        }
+        
+        try {
+            Log.d(TAG, "🗑️ Deletando comando (ID: $commandId)...")
+            
+            client.from("device_commands")
+                .delete {
                     filter {
                         eq("id", commandId)
                     }
                 }
             
-            Log.d(TAG, "✅ Comando $commandId marcado como executado com sucesso!")
+            Log.d(TAG, "✅ Comando deletado com sucesso!")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao marcar comando $commandId como executado: ${e.message}", e)
+            Log.e(TAG, "❌ Erro ao deletar comando: ${e.message}", e)
             false
         }
     }

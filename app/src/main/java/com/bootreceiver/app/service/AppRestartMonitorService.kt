@@ -166,7 +166,6 @@ class AppRestartMonitorService : Service() {
                     
                     Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                     Log.d(TAG, "⚠️⚠️⚠️ COMANDO DE REINICIAR APP ENCONTRADO! ⚠️⚠️⚠️")
-                    Log.d(TAG, "Comando ID: $commandId")
                     Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                     
                     // Marca que está reiniciando
@@ -192,32 +191,38 @@ class AppRestartMonitorService : Service() {
                         
                         // CRÍTICO: Marca como executado ANTES de reiniciar
                         // Isso garante que mesmo se o app reiniciar, o comando já está marcado
-                        Log.d(TAG, "📝 Marcando comando $commandId como executado no Supabase...")
+                        Log.d(TAG, "📝 Marcando comando como executado no Supabase...")
                         val marked = supabaseManager.markCommandAsExecutedById(commandId)
                         
                         if (!marked) {
                             Log.e(TAG, "❌ FALHA CRÍTICA: Não foi possível marcar comando como executado!")
-                            Log.e(TAG, "⚠️ Abortando reinício para evitar loop. Verifique o banco de dados.")
-                            // Aguarda mais tempo antes de tentar novamente
-                            delay(ERROR_RETRY_DELAY_MS)
-                            isRestarting = false
-                            continue
+                            Log.e(TAG, "⚠️ Tentando deletar comando como alternativa...")
+                            // Tenta deletar como alternativa
+                            val deleted = supabaseManager.deleteCommandById(commandId)
+                            if (!deleted) {
+                                Log.e(TAG, "❌ Também falhou ao deletar comando. Abortando reinício.")
+                                delay(ERROR_RETRY_DELAY_MS)
+                                isRestarting = false
+                                continue
+                            } else {
+                                Log.d(TAG, "✅ Comando deletado como alternativa")
+                            }
+                        } else {
+                            Log.d(TAG, "✅ Comando marcado como executado com sucesso!")
                         }
-                        
-                        Log.d(TAG, "✅ Comando $commandId marcado como executado com sucesso!")
                         
                         // Adiciona à lista de comandos processados
                         if (commandId != null) {
                             processedCommandIds.add(commandId)
                         }
                         
-                        // Verifica novamente se o comando foi realmente marcado (double-check)
+                        // Verifica novamente se o comando foi realmente processado (double-check)
                         delay(2000) // Aguarda 2 segundos para garantir que foi salvo no banco
                         val stillHasCommand = supabaseManager.getRestartAppCommand(deviceId)
                         if (stillHasCommand != null && stillHasCommand.id == commandId) {
-                            Log.w(TAG, "⚠️ Comando ainda aparece como pendente após marcar como executado!")
-                            Log.w(TAG, "⚠️ Tentando marcar novamente...")
-                            supabaseManager.markCommandAsExecutedById(commandId)
+                            Log.w(TAG, "⚠️ Comando ainda aparece como pendente após processar!")
+                            Log.w(TAG, "⚠️ Tentando deletar como fallback...")
+                            supabaseManager.deleteCommandById(commandId)
                             delay(1000)
                         }
                         
@@ -229,7 +234,7 @@ class AppRestartMonitorService : Service() {
                         if (success) {
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                             Log.d(TAG, "✅✅✅ APP REINICIADO COM SUCESSO! ✅✅✅")
-                            Log.d(TAG, "✅ Comando $commandId foi executado e marcado como executado")
+                            Log.d(TAG, "✅ Comando foi executado e marcado como executado no banco")
                             Log.d(TAG, "ℹ️ Não reiniciará novamente até que um NOVO comando seja criado")
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                         } else {

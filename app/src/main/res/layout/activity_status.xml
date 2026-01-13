@@ -101,7 +101,10 @@
                 android:layout_height="wrap_content"
                 android:text="Reiniciar App Agora"
                 android:textColor="#FFFFFF"
-                android:backgroundTint="#3B82F6" />
+                android:textStyle="bold"
+                android:backgroundTint="#10B981"
+                android:padding="16dp"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <!-- Informações do Dispositivo -->
