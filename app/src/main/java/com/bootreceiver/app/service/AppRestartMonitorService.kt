@@ -159,7 +159,7 @@ class AppRestartMonitorService : Service() {
                     
                     // Verifica se este comando já foi processado nesta sessão
                     if (commandId != null && processedCommandIds.contains(commandId)) {
-                        Log.d(TAG, "ℹ️ Comando $commandId já foi processado nesta sessão, ignorando...")
+                        Log.d(TAG, "ℹ️ Comando já foi processado nesta sessão, ignorando...")
                         delay(CHECK_INTERVAL_MS)
                         continue
                     }

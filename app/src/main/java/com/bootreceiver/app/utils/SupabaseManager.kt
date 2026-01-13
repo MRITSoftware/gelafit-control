@@ -75,7 +75,7 @@ class SupabaseManager {
         }
         
         try {
-            Log.d(TAG, "📝 Marcando comando como executado (ID: $commandId)...")
+            Log.d(TAG, "📝 Marcando comando como executado...")
             
             // Atualiza o campo executed para true e executed_at para agora
             val updateData = mapOf(
@@ -132,7 +132,7 @@ class SupabaseManager {
         }
         
         try {
-            Log.d(TAG, "🗑️ Deletando comando (ID: $commandId)...")
+            Log.d(TAG, "🗑️ Deletando comando...")
             
             client.from("device_commands")
                 .delete {
