@@ -96,9 +96,11 @@ O app requer as seguintes permissões (já configuradas no `AndroidManifest.xml`
 2. **Abra o app** manualmente (aparecerá a tela de seleção)
 3. **Registre o dispositivo** (informe o email da unidade)
 4. **Escolha o aplicativo** que deve ser aberto automaticamente
-5. O app será salvo e usado nos próximos boots
+5. **Pronto!** O app está configurado e funcionará automaticamente nos próximos boots
 
 **💡 Dica:** Se o app fechar por algum motivo, ele será aberto automaticamente no próximo boot do dispositivo.
+
+**📖 Guia completo de uso:** Veja [COMO_USAR.md](COMO_USAR.md)
 
 ## 📋 Como Funciona
 
