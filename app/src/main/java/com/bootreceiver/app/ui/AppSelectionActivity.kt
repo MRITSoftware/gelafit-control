@@ -21,8 +21,6 @@ import com.bootreceiver.app.R
 import com.bootreceiver.app.utils.DeviceIdManager
 import com.bootreceiver.app.utils.PermissionChecker
 import com.bootreceiver.app.utils.PreferenceManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,7 +36,6 @@ class AppSelectionActivity : AppCompatActivity() {
     
     private lateinit var listView: ListView
     private lateinit var searchEditText: EditText
-    private lateinit var deviceIdText: TextView
     private lateinit var preferenceManager: PreferenceManager
     private val appsList = mutableListOf<AppInfo>()
     private val filteredAppsList = mutableListOf<AppInfo>()
@@ -79,7 +76,6 @@ class AppSelectionActivity : AppCompatActivity() {
      * Mostra diálogo para registrar o dispositivo com email da unidade
      */
     private fun showDeviceRegistrationDialog() {
-        val deviceId = DeviceIdManager.getDeviceId(this)
         val input = EditText(this)
         input.hint = "Email da unidade (ex: sala01@empresa.com)"
         input.inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
@@ -88,8 +84,7 @@ class AppSelectionActivity : AppCompatActivity() {
             .setTitle("Registro do Dispositivo")
             .setMessage(
                 "Bem-vindo ao MRIT Control!\n\n" +
-                "Para registrar este dispositivo, informe o email da unidade:\n\n" +
-                "Device ID: $deviceId"
+                "Para registrar este dispositivo, informe o email da unidade:"
             )
             .setView(input)
             .setPositiveButton("Registrar") { _, _ ->
@@ -101,6 +96,7 @@ class AppSelectionActivity : AppCompatActivity() {
                     Toast.makeText(this, "Por favor, informe um email válido", Toast.LENGTH_SHORT).show()
                     showDeviceRegistrationDialog() // Mostra novamente
                 } else {
+                    val deviceId = DeviceIdManager.getDeviceId(this)
                     registerDevice(deviceId, email)
                 }
             }
@@ -160,32 +156,6 @@ class AppSelectionActivity : AppCompatActivity() {
     private fun setupUI() {
         listView = findViewById(R.id.listViewApps)
         searchEditText = findViewById(R.id.searchEditText)
-        deviceIdText = findViewById(R.id.deviceIdText)
-        
-        // Botão de status
-        val btnStatus = findViewById<androidx.appcompat.widget.AppCompatButton>(R.id.btnStatus)
-        btnStatus?.setOnClickListener {
-            val intent = Intent(this, StatusActivity::class.java)
-            startActivity(intent)
-        }
-        
-        // Mostra o Device ID e nome da unidade no rodapé
-        val deviceId = DeviceIdManager.getDeviceId(this)
-        val unitName = preferenceManager.getUnitName()
-        deviceIdText.text = if (unitName != null) {
-            "Device ID: $deviceId | Unidade: $unitName"
-        } else {
-            "Device ID: $deviceId"
-        }
-        deviceIdText.setOnClickListener {
-            showDeviceIdDialog()
-        }
-        
-        // Mostra diálogo informativo na primeira vez
-        if (!preferenceManager.hasSeenDeviceIdInfo()) {
-            showDeviceIdDialog()
-            preferenceManager.setHasSeenDeviceIdInfo(true)
-        }
         
         // Inicializa adapter vazio
         adapter = AppListAdapter(filteredAppsList)
@@ -202,31 +172,6 @@ class AppSelectionActivity : AppCompatActivity() {
             val selectedApp = filteredAppsList[position]
             showConfirmationDialog(selectedApp)
         }
-    }
-    
-    /**
-     * Mostra diálogo com o Device ID e permite copiar
-     */
-    private fun showDeviceIdDialog() {
-        val deviceId = DeviceIdManager.getDeviceId(this)
-        
-        AlertDialog.Builder(this)
-            .setTitle("Device ID (ID do Dispositivo)")
-            .setMessage(
-                "Este é o ID único do seu dispositivo:\n\n" +
-                "$deviceId\n\n" +
-                "Use este ID no Supabase para enviar comandos de reiniciar.\n\n" +
-                "Você também pode ver o ID no rodapé desta tela."
-            )
-            .setPositiveButton("Copiar") { _, _ ->
-                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Device ID", deviceId)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(this, "Device ID copiado para a área de transferência!", Toast.LENGTH_LONG).show()
-            }
-            .setNegativeButton("Fechar", null)
-            .setCancelable(true)
-            .show()
     }
     
     /**

@@ -145,7 +145,8 @@ class KioskModeService : Service() {
                     }
                     lastKioskMode = kioskMode
                 } else if (kioskMode == true) {
-                    // Se kiosk está ativo, verifica se o app está rodando
+                    // Se kiosk está ativo, verifica constantemente se o app está rodando
+                    // Verifica muito mais frequentemente para prevenir minimização
                     ensureAppIsRunning()
                 }
                 
@@ -159,6 +160,7 @@ class KioskModeService : Service() {
     
     /**
      * Aplica o modo kiosk: garante que o app configurado esteja rodando
+     * e inicia monitoramento agressivo para prevenir minimização
      */
     private fun applyKioskMode() {
         val preferenceManager = PreferenceManager(this)
@@ -179,6 +181,37 @@ class KioskModeService : Service() {
         } else {
             Log.d(TAG, "✅ App já está rodando")
         }
+        
+        // Inicia monitoramento agressivo em uma coroutine separada
+        serviceScope.launch {
+            aggressiveKioskMonitoring(targetPackage)
+        }
+    }
+    
+    /**
+     * Monitoramento agressivo do app quando kiosk está ativo
+     * Verifica constantemente e reabre imediatamente se minimizado
+     */
+    private suspend fun aggressiveKioskMonitoring(targetPackage: String) {
+        while (isRunning) {
+            try {
+                val kioskMode = supabaseManager.getKioskMode(deviceId)
+                if (kioskMode == true) {
+                    if (!isAppRunning(targetPackage)) {
+                        Log.d(TAG, "🚨 APP MINIMIZADO! REABRINDO IMEDIATAMENTE...")
+                        val appLauncher = AppLauncher(this@KioskModeService)
+                        appLauncher.launchApp(targetPackage)
+                    }
+                    delay(CHECK_INTERVAL_MS) // Verifica muito frequentemente
+                } else {
+                    // Se kiosk foi desativado, para o monitoramento agressivo
+                    break
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro no monitoramento agressivo: ${e.message}", e)
+                delay(ERROR_RETRY_DELAY_MS)
+            }
+        }
     }
     
     /**
@@ -190,6 +223,7 @@ class KioskModeService : Service() {
     
     /**
      * Garante que o app configurado esteja rodando (se kiosk estiver ativo)
+     * Verifica mais frequentemente quando kiosk está ativo
      */
     private fun ensureAppIsRunning() {
         val preferenceManager = PreferenceManager(this)
@@ -200,9 +234,27 @@ class KioskModeService : Service() {
         }
         
         if (!isAppRunning(targetPackage)) {
-            Log.d(TAG, "⚠️ App minimizado/fechado com kiosk ativo! Reabrindo...")
+            Log.d(TAG, "⚠️⚠️⚠️ APP MINIMIZADO COM KIOSK ATIVO! REABRINDO IMEDIATAMENTE...")
             val appLauncher = AppLauncher(this)
+            
+            // Tenta múltiplas vezes rapidamente
             appLauncher.launchApp(targetPackage)
+            
+            // Aguarda 200ms e tenta novamente (muito mais rápido)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!isAppRunning(targetPackage)) {
+                    Log.d(TAG, "⚠️ Tentativa 2: Reabrindo app...")
+                    appLauncher.launchApp(targetPackage)
+                }
+            }, 200)
+            
+            // Aguarda mais 500ms e tenta novamente
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!isAppRunning(targetPackage)) {
+                    Log.d(TAG, "⚠️ Tentativa 3: Reabrindo app...")
+                    appLauncher.launchApp(targetPackage)
+                }
+            }, 700)
         }
     }
     
@@ -249,7 +301,7 @@ class KioskModeService : Service() {
         private const val TAG = "KioskModeService"
         private const val CHANNEL_ID = "kiosk_mode_channel"
         private const val NOTIFICATION_ID = 2
-        private const val CHECK_INTERVAL_MS = 10000L // Verifica a cada 10 segundos
-        private const val ERROR_RETRY_DELAY_MS = 30000L // Em caso de erro, aguarda 30 segundos
+        private const val CHECK_INTERVAL_MS = 500L // Verifica a cada 500ms quando kiosk ativo (muito rápido para prevenir minimização)
+        private const val ERROR_RETRY_DELAY_MS = 2000L // Em caso de erro, aguarda 2 segundos
     }
 }

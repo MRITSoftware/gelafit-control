@@ -70,7 +70,7 @@
         android:clipToPadding="false"
         android:elevation="4dp" />
 
-    <!-- Rodapé com Device ID e copyright -->
+    <!-- Rodapé com copyright -->
     <LinearLayout
         android:id="@+id/footerLayout"
         android:layout_width="match_parent"
@@ -81,28 +81,6 @@
         android:gravity="center"
         android:background="@drawable/glassmorphism_card"
         android:elevation="8dp">
-
-        <TextView
-            android:id="@+id/deviceIdText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Device ID: Carregando..."
-            android:textSize="11sp"
-            android:textColor="#B0FFFFFF"
-            android:layout_marginBottom="8dp"
-            android:fontFamily="monospace" />
-
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/btnStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="📊 Ver Status do Sistema"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:backgroundTint="#10B981"
-            android:padding="16dp"
-            android:textSize="16sp"
-            android:layout_marginBottom="8dp" />
 
         <TextView
             android:layout_width="wrap_content"

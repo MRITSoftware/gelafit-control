@@ -43,6 +43,7 @@ class AppLauncher(private val context: Context) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             
             // Abre o app
             context.startActivity(launchIntent)
