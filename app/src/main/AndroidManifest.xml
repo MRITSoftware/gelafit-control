@@ -13,6 +13,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Permissão para reiniciar dispositivo (requer Device Admin) -->
     <uses-permission android:name="android.permission.REBOOT" />
+    <!-- Permissão para Foreground Service (Android 9.0+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".BootReceiverApplication"
@@ -58,7 +61,8 @@
         <service
             android:name=".service.RebootMonitorService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Device Admin Receiver para permitir reiniciar dispositivo -->
         <receiver

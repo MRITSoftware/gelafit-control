@@ -1,9 +1,17 @@
 package com.bootreceiver.app.service
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.bootreceiver.app.R
+import com.bootreceiver.app.ui.AppSelectionActivity
 import com.bootreceiver.app.utils.DeviceIdManager
 import com.bootreceiver.app.utils.RebootManager
 import com.bootreceiver.app.utils.SupabaseManager
@@ -37,6 +45,7 @@ class RebootMonitorService : Service() {
         Log.d(TAG, "RebootMonitorService criado")
         deviceId = DeviceIdManager.getDeviceId(this)
         rebootManager = RebootManager(this)
+        createNotificationChannel()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -47,6 +56,13 @@ class RebootMonitorService : Service() {
         
         isRunning = true
         Log.d(TAG, "RebootMonitorService iniciado para dispositivo: $deviceId")
+        
+        // Inicia como Foreground Service para garantir que continue rodando
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
         
         // Verifica se Device Admin está ativo
         if (!rebootManager.isDeviceAdminActive()) {
@@ -65,12 +81,54 @@ class RebootMonitorService : Service() {
     }
     
     /**
+     * Cria o canal de notificação (necessário para Android 8.0+)
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Monitoramento de Comandos",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Monitora comandos de reiniciar do Supabase"
+                setShowBadge(false)
+            }
+            
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
+    /**
+     * Cria a notificação para o Foreground Service
+     */
+    private fun createNotification(): Notification {
+        val intent = Intent(this, AppSelectionActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("MRIT Control - Monitorando")
+            .setContentText("Monitorando comandos de reiniciar...")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
+    }
+    
+    /**
      * Inicia o monitoramento periódico do banco de dados
      */
     private suspend fun startMonitoring() {
         while (isRunning) {
             try {
-                Log.d(TAG, "Verificando comando de reiniciar...")
+                Log.d(TAG, "Verificando comando de reiniciar para dispositivo: $deviceId")
                 
                 val hasRebootCommand = supabaseManager.checkRebootCommand(deviceId)
                 
@@ -118,6 +176,8 @@ class RebootMonitorService : Service() {
     
     companion object {
         private const val TAG = "RebootMonitorService"
+        private const val CHANNEL_ID = "reboot_monitor_channel"
+        private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 30000L // Verifica a cada 30 segundos
         private const val ERROR_RETRY_DELAY_MS = 60000L // Em caso de erro, aguarda 1 minuto
     }
