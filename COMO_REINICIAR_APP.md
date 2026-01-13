@@ -92,9 +92,10 @@ adb logcat | grep -E "AppRestartMonitor|AppLauncher"
 
 1. **O app monitora a cada 30 segundos** - pode levar até 30 segundos para detectar o comando
 2. **Reiniciar app não reinicia o dispositivo** - apenas fecha e reabre o app configurado
-3. **Cooldown de 5 minutos** - após reiniciar, o app não reinicia novamente por 5 minutos (proteção contra loops)
-4. **Se o app não fechar completamente**, pode não reiniciar corretamente
-5. **Alguns apps podem não permitir fechamento** - depende das permissões do app
+3. **Cada comando é executado UMA VEZ** - após executar, o comando é marcado como executado e não será executado novamente
+4. **Para reiniciar novamente, crie um NOVO comando** - o mesmo comando não será executado duas vezes
+5. **Se o app não fechar completamente**, pode não reiniciar corretamente
+6. **Alguns apps podem não permitir fechamento** - depende das permissões do app
 
 ## 🛑 Se o App Continuar Reiniciando
 

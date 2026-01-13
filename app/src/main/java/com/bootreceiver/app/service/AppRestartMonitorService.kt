@@ -37,8 +37,8 @@ class AppRestartMonitorService : Service() {
     private var isRunning = false
     private val supabaseManager = SupabaseManager()
     private lateinit var deviceId: String
-    private var lastRestartTime: Long = 0 // Timestamp do último reinício
     private var isRestarting = false // Flag para evitar múltiplos reinícios simultâneos
+    private val processedCommandIds = mutableSetOf<String>() // IDs de comandos já processados nesta sessão
     
     override fun onBind(intent: Intent?): IBinder? = null
     
@@ -144,15 +144,6 @@ class AppRestartMonitorService : Service() {
                 Log.d(TAG, "🔍 Ciclo de verificação #${System.currentTimeMillis() / CHECK_INTERVAL_MS}")
                 Log.d(TAG, "Device ID: $deviceId")
                 
-                // Verifica cooldown (evita reiniciar múltiplas vezes seguidas)
-                val timeSinceLastRestart = System.currentTimeMillis() - lastRestartTime
-                if (timeSinceLastRestart < COOLDOWN_AFTER_RESTART_MS) {
-                    val remainingSeconds = (COOLDOWN_AFTER_RESTART_MS - timeSinceLastRestart) / 1000
-                    Log.d(TAG, "⏳ Cooldown ativo: ${remainingSeconds}s restantes (evita loop de reinício)")
-                    delay(CHECK_INTERVAL_MS)
-                    continue
-                }
-                
                 // Verifica se já está reiniciando (evita múltiplos reinícios simultâneos)
                 if (isRestarting) {
                     Log.d(TAG, "⏳ Reinício já em andamento, aguardando...")
@@ -160,11 +151,22 @@ class AppRestartMonitorService : Service() {
                     continue
                 }
                 
-                val hasCommand = supabaseManager.checkRestartAppCommand(deviceId)
+                // Busca comando pendente (retorna o ID do comando se houver)
+                val commandInfo = supabaseManager.getRestartAppCommand(deviceId)
                 
-                if (hasCommand) {
+                if (commandInfo != null) {
+                    val commandId = commandInfo.id
+                    
+                    // Verifica se este comando já foi processado nesta sessão
+                    if (commandId != null && processedCommandIds.contains(commandId)) {
+                        Log.d(TAG, "ℹ️ Comando $commandId já foi processado nesta sessão, ignorando...")
+                        delay(CHECK_INTERVAL_MS)
+                        continue
+                    }
+                    
                     Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                     Log.d(TAG, "⚠️⚠️⚠️ COMANDO DE REINICIAR APP ENCONTRADO! ⚠️⚠️⚠️")
+                    Log.d(TAG, "Comando ID: $commandId")
                     Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                     
                     // Marca que está reiniciando
@@ -177,9 +179,10 @@ class AppRestartMonitorService : Service() {
                     if (targetPackageName.isNullOrEmpty()) {
                         Log.w(TAG, "Nenhum app configurado. Não é possível reiniciar.")
                         // Marca como executado mesmo assim para não ficar em loop
-                        val marked = supabaseManager.markCommandAsExecuted(deviceId, "restart_app")
+                        val marked = supabaseManager.markCommandAsExecutedById(commandId)
                         if (marked) {
                             Log.d(TAG, "✅ Comando marcado como executado (sem app configurado)")
+                            if (commandId != null) processedCommandIds.add(commandId)
                         } else {
                             Log.e(TAG, "❌ Falha ao marcar comando como executado!")
                         }
@@ -187,38 +190,36 @@ class AppRestartMonitorService : Service() {
                     } else {
                         Log.d(TAG, "App configurado: $targetPackageName")
                         
-                        // Marca como executado ANTES de reiniciar (importante!)
-                        Log.d(TAG, "📝 Marcando comando como executado no Supabase...")
-                        val marked = supabaseManager.markCommandAsExecuted(deviceId, "restart_app")
+                        // CRÍTICO: Marca como executado ANTES de reiniciar
+                        // Isso garante que mesmo se o app reiniciar, o comando já está marcado
+                        Log.d(TAG, "📝 Marcando comando $commandId como executado no Supabase...")
+                        val marked = supabaseManager.markCommandAsExecutedById(commandId)
                         
                         if (!marked) {
                             Log.e(TAG, "❌ FALHA CRÍTICA: Não foi possível marcar comando como executado!")
-                            Log.e(TAG, "⚠️ Isso pode causar loop de reinício. Verifique o banco de dados.")
+                            Log.e(TAG, "⚠️ Abortando reinício para evitar loop. Verifique o banco de dados.")
                             // Aguarda mais tempo antes de tentar novamente
                             delay(ERROR_RETRY_DELAY_MS)
                             isRestarting = false
                             continue
                         }
                         
-                        Log.d(TAG, "✅ Comando marcado como executado com sucesso!")
+                        Log.d(TAG, "✅ Comando $commandId marcado como executado com sucesso!")
                         
-                        // Verifica novamente se ainda há comando pendente (double-check)
-                        delay(2000) // Aguarda 2 segundos para garantir que foi salvo
-                        val stillHasCommand = supabaseManager.checkRestartAppCommand(deviceId)
-                        if (stillHasCommand) {
-                            Log.w(TAG, "⚠️ Ainda há comando pendente após marcar como executado!")
-                            Log.w(TAG, "⚠️ Pode haver múltiplos comandos ou problema no banco.")
-                            // Tenta marcar todos como executados
-                            var attempts = 0
-                            while (attempts < 3 && supabaseManager.checkRestartAppCommand(deviceId)) {
-                                supabaseManager.markCommandAsExecuted(deviceId, "restart_app")
-                                delay(1000)
-                                attempts++
-                            }
+                        // Adiciona à lista de comandos processados
+                        if (commandId != null) {
+                            processedCommandIds.add(commandId)
                         }
                         
-                        // Atualiza timestamp do último reinício
-                        lastRestartTime = System.currentTimeMillis()
+                        // Verifica novamente se o comando foi realmente marcado (double-check)
+                        delay(2000) // Aguarda 2 segundos para garantir que foi salvo no banco
+                        val stillHasCommand = supabaseManager.getRestartAppCommand(deviceId)
+                        if (stillHasCommand != null && stillHasCommand.id == commandId) {
+                            Log.w(TAG, "⚠️ Comando ainda aparece como pendente após marcar como executado!")
+                            Log.w(TAG, "⚠️ Tentando marcar novamente...")
+                            supabaseManager.markCommandAsExecutedById(commandId)
+                            delay(1000)
+                        }
                         
                         // Reinicia o app
                         Log.d(TAG, "🔄 Reiniciando app: $targetPackageName")
@@ -228,7 +229,8 @@ class AppRestartMonitorService : Service() {
                         if (success) {
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                             Log.d(TAG, "✅✅✅ APP REINICIADO COM SUCESSO! ✅✅✅")
-                            Log.d(TAG, "⏳ Cooldown de ${COOLDOWN_AFTER_RESTART_MS / 1000}s ativado")
+                            Log.d(TAG, "✅ Comando $commandId foi executado e marcado como executado")
+                            Log.d(TAG, "ℹ️ Não reiniciará novamente até que um NOVO comando seja criado")
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                         } else {
                             Log.e(TAG, "❌ Falha ao reiniciar app: $targetPackageName")
@@ -270,6 +272,5 @@ class AppRestartMonitorService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 30000L // Verifica a cada 30 segundos
         private const val ERROR_RETRY_DELAY_MS = 60000L // Em caso de erro, aguarda 1 minuto
-        private const val COOLDOWN_AFTER_RESTART_MS = 300000L // 5 minutos de cooldown após reiniciar
     }
 }

@@ -29,9 +29,9 @@ class SupabaseManager {
      * Verifica se há um comando de reiniciar app pendente
      * 
      * @param deviceId ID único do dispositivo
-     * @return true se houver comando pendente, false caso contrário
+     * @return DeviceCommand se houver comando pendente, null caso contrário
      */
-    suspend fun checkRestartAppCommand(deviceId: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun getRestartAppCommand(deviceId: String): DeviceCommand? = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🔍 Verificando comando de reiniciar app para dispositivo: $deviceId")
             
@@ -42,21 +42,58 @@ class SupabaseManager {
                         eq("command", "restart_app")
                         eq("executed", false)
                     }
+                    // Ordena por data de criação (mais recente primeiro)
+                    // Limita a 1 resultado (pega apenas o mais recente)
                 }
                 .decodeSingle<DeviceCommand>()
             
-            Log.d(TAG, "✅ Comando encontrado! ID: ${response.id}, Command: ${response.command}")
-            true
+            Log.d(TAG, "✅ Comando encontrado! ID: ${response.id}, Command: ${response.command}, Created: ${response.created_at}")
+            response
         } catch (e: Exception) {
             if (e.message?.contains("No rows") == true || 
                 e.message?.contains("not found") == true ||
                 e.message?.contains("No value") == true) {
                 Log.d(TAG, "ℹ️ Nenhum comando de reiniciar app pendente")
-                false
+                null
             } else {
                 Log.e(TAG, "❌ Erro ao verificar comando: ${e.message}", e)
-                false
+                null
             }
+        }
+    }
+    
+    /**
+     * Marca um comando específico como executado pelo ID
+     * 
+     * @param commandId ID do comando
+     * @return true se marcou com sucesso, false caso contrário
+     */
+    suspend fun markCommandAsExecutedById(commandId: String?): Boolean = withContext(Dispatchers.IO) {
+        if (commandId == null) {
+            Log.w(TAG, "⚠️ Tentando marcar comando sem ID")
+            return@withContext false
+        }
+        
+        try {
+            Log.d(TAG, "📝 Marcando comando $commandId como executado...")
+            
+            val updateData = mapOf(
+                "executed" to true,
+                "executed_at" to java.time.Instant.now().toString()
+            )
+            
+            client.from("device_commands")
+                .update(updateData) {
+                    filter {
+                        eq("id", commandId)
+                    }
+                }
+            
+            Log.d(TAG, "✅ Comando $commandId marcado como executado com sucesso!")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao marcar comando $commandId como executado: ${e.message}", e)
+            false
         }
     }
     

@@ -90,10 +90,11 @@ ORDER BY created_at DESC;
 
 O app agora tem proteções automáticas:
 
-1. **Cooldown de 5 minutos**: Após reiniciar, não reinicia novamente por 5 minutos
+1. **Cada comando é executado UMA VEZ**: Após executar, o comando é marcado como executado e não será executado novamente
 2. **Flag de reinício**: Evita múltiplos reinícios simultâneos
-3. **Marca múltiplos comandos**: Se houver vários comandos pendentes, marca todos
-4. **Verificação dupla**: Verifica novamente após marcar como executado
+3. **Rastreamento de comandos processados**: Mantém lista de comandos já processados nesta sessão
+4. **Marca pelo ID específico**: Marca o comando específico pelo ID, não todos de uma vez
+5. **Verificação dupla**: Verifica novamente após marcar como executado para garantir que foi salvo
 
 ## 📋 Verificar se Funcionou
 
