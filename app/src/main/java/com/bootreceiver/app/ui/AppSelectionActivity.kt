@@ -195,6 +195,11 @@ class AppSelectionActivity : AppCompatActivity() {
             showConfirmationDialog(selectedApp)
         }
     }
+    
+    /**
+     * Mostra diálogo com o Device ID e permite copiar
+     */
+    private fun showDeviceIdDialog() {
         val deviceId = DeviceIdManager.getDeviceId(this)
         
         AlertDialog.Builder(this)
