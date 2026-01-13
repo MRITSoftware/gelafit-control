@@ -69,6 +69,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- Serviço de overlay para interceptar gestos em modo kiosk -->
+        <service
+            android:name=".service.KioskOverlayService"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- BroadcastReceiver para interceptar eventos de minimização em modo kiosk -->
         <receiver
             android:name=".receiver.KioskModeReceiver"

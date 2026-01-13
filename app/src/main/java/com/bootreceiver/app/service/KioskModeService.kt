@@ -182,6 +182,17 @@ class KioskModeService : Service() {
             Log.d(TAG, "✅ App já está rodando")
         }
         
+        // Inicia overlay para interceptar gestos (requer permissão SYSTEM_ALERT_WINDOW)
+        try {
+            val overlayIntent = Intent(this, com.bootreceiver.app.service.KioskOverlayService::class.java).apply {
+                putExtra("kiosk_enabled", true)
+            }
+            startService(overlayIntent)
+            Log.d(TAG, "📡 Overlay de kiosk iniciado")
+        } catch (e: Exception) {
+            Log.w(TAG, "Não foi possível iniciar overlay (pode precisar de permissão): ${e.message}")
+        }
+        
         // Inicia monitoramento agressivo em uma coroutine separada
         serviceScope.launch {
             aggressiveKioskMonitoring(targetPackage)
@@ -219,6 +230,17 @@ class KioskModeService : Service() {
      */
     private fun removeKioskMode() {
         Log.d(TAG, "🔓 Modo kiosk removido. App pode ser minimizado normalmente.")
+        
+        // Remove overlay
+        try {
+            val overlayIntent = Intent(this, com.bootreceiver.app.service.KioskOverlayService::class.java).apply {
+                putExtra("kiosk_enabled", false)
+            }
+            startService(overlayIntent)
+            Log.d(TAG, "📡 Overlay de kiosk removido")
+        } catch (e: Exception) {
+            Log.w(TAG, "Erro ao remover overlay: ${e.message}")
+        }
     }
     
     /**
