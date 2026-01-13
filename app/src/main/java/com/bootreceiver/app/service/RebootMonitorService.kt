@@ -54,26 +54,37 @@ class RebootMonitorService : Service() {
             return START_STICKY
         }
         
-        isRunning = true
-        Log.d(TAG, "RebootMonitorService iniciado para dispositivo: $deviceId")
-        
-        // Inicia como Foreground Service para garantir que continue rodando
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, createNotification())
-        }
-        
-        // Verifica se Device Admin está ativo
-        if (!rebootManager.isDeviceAdminActive()) {
-            Log.w(TAG, "Device Admin não está ativo. Solicitando permissão...")
-            rebootManager.requestDeviceAdmin()
-            // Continua mesmo assim, pois o usuário pode ativar depois
-        }
-        
-        // Inicia o monitoramento em uma coroutine
-        serviceScope.launch {
-            startMonitoring()
+        try {
+            isRunning = true
+            Log.d(TAG, "RebootMonitorService iniciado para dispositivo: $deviceId")
+            
+            // Garante que o canal de notificação existe antes de criar a notificação
+            createNotificationChannel()
+            
+            // Inicia como Foreground Service para garantir que continue rodando
+            try {
+                val notification = createNotification()
+                startForeground(NOTIFICATION_ID, notification)
+                Log.d(TAG, "Foreground Service iniciado com sucesso")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao iniciar Foreground Service: ${e.message}", e)
+                // Tenta continuar mesmo sem foreground service
+            }
+            
+            // Verifica se Device Admin está ativo
+            if (!rebootManager.isDeviceAdminActive()) {
+                Log.w(TAG, "Device Admin não está ativo. Solicitando permissão...")
+                rebootManager.requestDeviceAdmin()
+                // Continua mesmo assim, pois o usuário pode ativar depois
+            }
+            
+            // Inicia o monitoramento em uma coroutine
+            serviceScope.launch {
+                startMonitoring()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro crítico ao iniciar serviço: ${e.message}", e)
+            isRunning = false
         }
         
         // Retorna START_STICKY para que o serviço seja reiniciado se for morto
@@ -104,21 +115,31 @@ class RebootMonitorService : Service() {
      */
     private fun createNotification(): Notification {
         val intent = Intent(this, AppSelectionActivity::class.java)
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            pendingIntentFlags
         )
+        
+        // Usa um ícone simples para notificações (drawable do sistema como fallback seguro)
+        val smallIcon = android.R.drawable.ic_dialog_info
         
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MRIT Control - Monitorando")
             .setContentText("Monitorando comandos de reiniciar...")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(smallIcon)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setAutoCancel(false)
             .build()
     }
     

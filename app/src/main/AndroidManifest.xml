@@ -61,8 +61,7 @@
         <service
             android:name=".service.RebootMonitorService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="false" />
 
         <!-- Device Admin Receiver para permitir reiniciar dispositivo -->
         <receiver
