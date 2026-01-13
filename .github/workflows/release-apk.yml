@@ -107,21 +107,30 @@ jobs:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
         ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
       
-    - name: Check APK exists
+    - name: Locate APK (signed or unsigned)
       run: |
-        if [ ! -f "app/build/outputs/apk/release/app-release.apk" ]; then
+        APK_SIGNED="app/build/outputs/apk/release/app-release.apk"
+        APK_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+        
+        if [ -f "$APK_SIGNED" ]; then
+          APK_PATH="$APK_SIGNED"
+        elif [ -f "$APK_UNSIGNED" ]; then
+          APK_PATH="$APK_UNSIGNED"
+        else
           echo "APK não encontrado! Verificando estrutura de diretórios..."
           find app/build -name "*.apk" || echo "Nenhum APK encontrado"
           ls -la app/build/outputs/apk/ || echo "Diretório não existe"
           exit 1
         fi
-        ls -lh app/build/outputs/apk/release/app-release.apk
-        echo "✅ APK gerado com sucesso!"
+        
+        echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+        ls -lh "$APK_PATH"
+        echo "✅ APK localizado em: $APK_PATH"
       
     - name: Get APK file info
       id: apk_info
       run: |
-        APK_PATH="app/build/outputs/apk/release/app-release.apk"
+        APK_PATH="${APK_PATH:-app/build/outputs/apk/release/app-release.apk}"
         APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
         APK_NAME="MRIT-Control-${{ steps.tag.outputs.tag_name }}.apk"
         echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
@@ -145,7 +154,7 @@ jobs:
           ### 📥 Download
           Baixe o APK abaixo e instale no seu dispositivo Android.
         files: |
-          app/build/outputs/apk/release/app-release.apk
+          ${{ env.APK_PATH }}
         draft: false
         prerelease: false
       env:
@@ -155,5 +164,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: app-release-${{ steps.tag.outputs.tag_name }}
-        path: app/build/outputs/apk/release/app-release.apk
+        path: ${{ env.APK_PATH }}
         retention-days: 90
