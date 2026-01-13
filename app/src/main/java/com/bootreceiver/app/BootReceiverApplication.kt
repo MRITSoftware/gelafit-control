@@ -1,8 +1,10 @@
 package com.bootreceiver.app
 
 import android.app.Application
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
+import com.bootreceiver.app.service.RebootMonitorService
 
 /**
  * Application class para inicialização global do app
@@ -41,6 +43,15 @@ class BootReceiverApplication : Application() {
             Log.d(TAG, "Receiver verificado e habilitado")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao verificar receiver: ${e.message}", e)
+        }
+        
+        // Inicia o serviço de monitoramento de comandos de reiniciar
+        try {
+            val monitorIntent = Intent(this, RebootMonitorService::class.java)
+            startService(monitorIntent)
+            Log.d(TAG, "RebootMonitorService iniciado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar RebootMonitorService: ${e.message}", e)
         }
     }
     

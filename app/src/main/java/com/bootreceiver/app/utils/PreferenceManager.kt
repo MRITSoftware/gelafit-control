@@ -45,8 +45,23 @@ class PreferenceManager(context: Context) {
         prefs.edit().remove(KEY_TARGET_PACKAGE).apply()
     }
     
+    /**
+     * Verifica se o usuário já viu a informação do Device ID
+     */
+    fun hasSeenDeviceIdInfo(): Boolean {
+        return prefs.getBoolean(KEY_HAS_SEEN_DEVICE_ID_INFO, false)
+    }
+    
+    /**
+     * Marca que o usuário já viu a informação do Device ID
+     */
+    fun setHasSeenDeviceIdInfo(hasSeen: Boolean) {
+        prefs.edit().putBoolean(KEY_HAS_SEEN_DEVICE_ID_INFO, hasSeen).apply()
+    }
+    
     companion object {
         private const val PREFS_NAME = "BootReceiverPrefs"
         private const val KEY_TARGET_PACKAGE = "target_package_name"
+        private const val KEY_HAS_SEEN_DEVICE_ID_INFO = "has_seen_device_id_info"
     }
 }

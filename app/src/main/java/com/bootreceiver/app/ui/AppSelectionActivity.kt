@@ -17,8 +17,11 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.bootreceiver.app.R
+import com.bootreceiver.app.utils.DeviceIdManager
 import com.bootreceiver.app.utils.PermissionChecker
 import com.bootreceiver.app.utils.PreferenceManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,6 +37,7 @@ class AppSelectionActivity : AppCompatActivity() {
     
     private lateinit var listView: ListView
     private lateinit var searchEditText: EditText
+    private lateinit var deviceIdText: TextView
     private lateinit var preferenceManager: PreferenceManager
     private val appsList = mutableListOf<AppInfo>()
     private val filteredAppsList = mutableListOf<AppInfo>()
@@ -62,6 +66,20 @@ class AppSelectionActivity : AppCompatActivity() {
         
         listView = findViewById(R.id.listViewApps)
         searchEditText = findViewById(R.id.searchEditText)
+        deviceIdText = findViewById(R.id.deviceIdText)
+        
+        // Mostra o Device ID no rodapé
+        val deviceId = DeviceIdManager.getDeviceId(this)
+        deviceIdText.text = "Device ID: $deviceId"
+        deviceIdText.setOnClickListener {
+            showDeviceIdDialog()
+        }
+        
+        // Mostra diálogo informativo na primeira vez
+        if (!preferenceManager.hasSeenDeviceIdInfo()) {
+            showDeviceIdDialog()
+            preferenceManager.setHasSeenDeviceIdInfo(true)
+        }
         
         // Inicializa adapter vazio
         adapter = AppListAdapter(filteredAppsList)
@@ -78,6 +96,31 @@ class AppSelectionActivity : AppCompatActivity() {
             val selectedApp = filteredAppsList[position]
             showConfirmationDialog(selectedApp)
         }
+    }
+    
+    /**
+     * Mostra diálogo com o Device ID e permite copiar
+     */
+    private fun showDeviceIdDialog() {
+        val deviceId = DeviceIdManager.getDeviceId(this)
+        
+        AlertDialog.Builder(this)
+            .setTitle("Device ID (ID do Dispositivo)")
+            .setMessage(
+                "Este é o ID único do seu dispositivo:\n\n" +
+                "$deviceId\n\n" +
+                "Use este ID no Supabase para enviar comandos de reiniciar.\n\n" +
+                "Você também pode ver o ID no rodapé desta tela."
+            )
+            .setPositiveButton("Copiar") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("Device ID", deviceId)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(this, "Device ID copiado para a área de transferência!", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Fechar", null)
+            .setCancelable(true)
+            .show()
     }
     
     /**

@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    kotlin("plugin.serialization") version "1.9.22"
 }
 
 android {
@@ -47,6 +48,16 @@ dependencies {
     
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    
+    // Supabase
+    implementation(platform("io.github.jan-tennert.supabase:bom:2.3.0"))
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    
+    // HTTP Client para Supabase
+    implementation("io.ktor:ktor-client-android:2.3.5")
+    
+    // Serialization do Kotlin
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     
     // Testes
     testImplementation("junit:junit:4.13.2")

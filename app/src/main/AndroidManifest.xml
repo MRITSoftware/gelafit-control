@@ -12,6 +12,8 @@
     <!-- Permissão para abrir apps mesmo com tela bloqueada (Android 10+) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Permissão para reiniciar dispositivo (requer Device Admin) -->
+    <uses-permission android:name="android.permission.REBOOT" />
 
     <application
         android:name=".BootReceiverApplication"
@@ -52,6 +54,25 @@
             android:name=".service.BootService"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- Serviço para monitorar comandos de reiniciar do Supabase -->
+        <service
+            android:name=".service.RebootMonitorService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Device Admin Receiver para permitir reiniciar dispositivo -->
+        <receiver
+            android:name=".receiver.DeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -26,12 +26,12 @@ Write-Host ""
 Write-Host "🔗 Configurando remote do GitHub..." -ForegroundColor Yellow
 $remoteExists = git remote get-url origin 2>$null
 if ($LASTEXITCODE -ne 0) {
-    git remote add origin https://github.com/MRITSoftware/boot-receiver.git
+    git remote add origin https://github.com/MRITSoftware/mrit-control.git
     Write-Host "✅ Remote adicionado" -ForegroundColor Green
 } else {
     Write-Host "✅ Remote já configurado: $remoteExists" -ForegroundColor Green
     Write-Host "🔄 Atualizando URL do remote..." -ForegroundColor Yellow
-    git remote set-url origin https://github.com/MRITSoftware/boot-receiver.git
+    git remote set-url origin https://github.com/MRITSoftware/mrit-control.git
 }
 
 # Adicionar todos os arquivos
@@ -46,24 +46,32 @@ if ([string]::IsNullOrWhiteSpace($status)) {
     $hasCommits = git log --oneline -1 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "❌ Nenhum commit encontrado. Criando commit inicial..." -ForegroundColor Yellow
-        git commit -m "feat: Adiciona aplicativo Boot Receiver para Android Stick
+        git commit -m "feat: Adiciona funcionalidade de reiniciar dispositivo via Supabase
 
 - BroadcastReceiver para BOOT_COMPLETED
 - Tela de seleção de app na primeira vez  
 - Serviço para verificar internet e abrir app
 - Retry automático quando não há internet
+- Integração com Supabase para comandos remotos
+- Reiniciar dispositivo via banco de dados
+- Device Admin para controle de reinício
+- Monitoramento automático de comandos
 - Compatível com Android TV/Stick
 - Workflow GitHub Actions para build automático
 - Documentação completa incluída"
     }
 } else {
     Write-Host "💾 Criando commit..." -ForegroundColor Yellow
-    git commit -m "feat: Adiciona aplicativo Boot Receiver para Android Stick
+    git commit -m "feat: Adiciona funcionalidade de reiniciar dispositivo via Supabase
 
 - BroadcastReceiver para BOOT_COMPLETED
 - Tela de seleção de app na primeira vez
 - Serviço para verificar internet e abrir app
 - Retry automático quando não há internet
+- Integração com Supabase para comandos remotos
+- Reiniciar dispositivo via banco de dados
+- Device Admin para controle de reinício
+- Monitoramento automático de comandos
 - Compatível com Android TV/Stick
 - Workflow GitHub Actions para build automático
 - Documentação completa incluída"
@@ -93,7 +101,7 @@ try {
     Write-Host "✅ Push concluído com sucesso!" -ForegroundColor Green
     Write-Host ""
     Write-Host "📦 O GitHub Actions irá gerar os APKs automaticamente!" -ForegroundColor Cyan
-    Write-Host "🔗 Acesse: https://github.com/MRITSoftware/boot-receiver/actions" -ForegroundColor Cyan
+    Write-Host "🔗 Acesse: https://github.com/MRITSoftware/mrit-control/actions" -ForegroundColor Cyan
 } catch {
     Write-Host ""
     Write-Host "❌ Erro ao fazer push. Possíveis causas:" -ForegroundColor Red
@@ -103,7 +111,7 @@ try {
     Write-Host ""
     Write-Host "💡 Soluções:" -ForegroundColor Cyan
     Write-Host "   - Use um Personal Access Token: https://github.com/settings/tokens" -ForegroundColor White
-    Write-Host "   - Ou configure SSH: git remote set-url origin git@github.com:MRITSoftware/boot-receiver.git" -ForegroundColor White
+    Write-Host "   - Ou configure SSH: git remote set-url origin git@github.com:MRITSoftware/mrit-control.git" -ForegroundColor White
     exit 1
 }
 

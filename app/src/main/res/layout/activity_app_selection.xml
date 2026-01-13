@@ -70,7 +70,7 @@
         android:clipToPadding="false"
         android:elevation="4dp" />
 
-    <!-- Rodapé com copyright -->
+    <!-- Rodapé com Device ID e copyright -->
     <LinearLayout
         android:id="@+id/footerLayout"
         android:layout_width="match_parent"
@@ -81,6 +81,16 @@
         android:gravity="center"
         android:background="@drawable/glassmorphism_card"
         android:elevation="8dp">
+
+        <TextView
+            android:id="@+id/deviceIdText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Device ID: Carregando..."
+            android:textSize="11sp"
+            android:textColor="#B0FFFFFF"
+            android:layout_marginBottom="8dp"
+            android:fontFamily="monospace" />
 
         <TextView
             android:layout_width="wrap_content"
