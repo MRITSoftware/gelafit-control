@@ -1,6 +1,7 @@
 package com.bootreceiver.app.utils
 
 import android.app.admin.DevicePolicyManager
+import com.bootreceiver.app.receiver.DeviceAdminReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
