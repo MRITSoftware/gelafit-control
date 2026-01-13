@@ -28,19 +28,37 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
-        api-level: 34
-        build-tools: 34.0.0
-        components: platform-tools,platforms;android-34,build-tools;34.0.0
+        packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+        accept-android-sdk-licenses: true
         
-    - name: Verify Gradle Wrapper
+    - name: Setup Gradle Wrapper
       run: |
+        # Verifica se gradlew existe
         if [ ! -f "./gradlew" ]; then
-          echo "Gradle wrapper não encontrado. Verificando estrutura..."
-          ls -la
+          echo "❌ gradlew não encontrado no repositório!"
           exit 1
         fi
+        
+        # Verifica se gradle-wrapper.jar existe, se não, baixa da versão correta
+        if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          echo "📥 gradle-wrapper.jar não encontrado. Baixando..."
+          mkdir -p gradle/wrapper
+          # Extrai a versão do Gradle do arquivo de propriedades (formato: gradle-8.2-bin.zip)
+          GRADLE_VERSION=$(grep "distributionUrl" gradle/wrapper/gradle-wrapper.properties | sed -n 's/.*gradle-\([0-9.]*\)-.*/\1/p')
+          if [ -z "$GRADLE_VERSION" ]; then
+            GRADLE_VERSION="8.2"
+          fi
+          echo "📦 Usando Gradle versão: $GRADLE_VERSION"
+          # Baixa o wrapper jar da versão correta do repositório oficial
+          curl -L -o gradle/wrapper/gradle-wrapper.jar "https://github.com/gradle/gradle/raw/v${GRADLE_VERSION}/gradle/wrapper/gradle-wrapper.jar"
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "⚠️ Falha ao baixar, tentando URL alternativa..."
+            curl -L -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VERSION}/gradle/wrapper/gradle-wrapper.jar"
+          fi
+        fi
+        
         chmod +x ./gradlew
-        ./gradlew --version
+        echo "✅ Gradle wrapper configurado"
       
     - name: Cache Gradle dependencies
       uses: actions/cache@v4
