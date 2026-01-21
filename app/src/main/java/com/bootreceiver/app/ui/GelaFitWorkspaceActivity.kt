@@ -59,6 +59,7 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     private var isActive: Boolean? = null
     private var kioskMode: Boolean? = null
     private var isMonitoring = false
+    private var isOpeningAllowedActivity = false // Flag para permitir abrir activities permitidas
     private lateinit var appsGridRecyclerView: RecyclerView
     private val selectedApps = mutableListOf<AppInfo>()
     private val appAddedReceiver = object : BroadcastReceiver() {
@@ -439,9 +440,14 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      */
     private fun checkSettings() {
         // Permite abrir mesmo com kiosk ativo (para testes)
+        isOpeningAllowedActivity = true // Marca que estamos abrindo uma activity permitida
         val intent = Intent(this, SettingsCheckActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
+        // Reseta a flag após um delay para permitir que a activity abra
+        Handler(Looper.getMainLooper()).postDelayed({
+            isOpeningAllowedActivity = false
+        }, 500)
     }
     
     /**
@@ -449,9 +455,14 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      */
     private fun addProductToGrid() {
         // Permite abrir mesmo com kiosk ativo (para testes)
+        isOpeningAllowedActivity = true // Marca que estamos abrindo uma activity permitida
         val intent = Intent(this, AddProductActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
+        // Reseta a flag após um delay para permitir que a activity abra
+        Handler(Looper.getMainLooper()).postDelayed({
+            isOpeningAllowedActivity = false
+        }, 500)
     }
     
     /**
@@ -919,6 +930,12 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         
+        // Se estamos abrindo uma activity permitida (SettingsCheck ou AddProduct), não bloqueia
+        if (isOpeningAllowedActivity) {
+            Log.d(TAG, "🔓 Pausa permitida (abrindo activity permitida)")
+            return
+        }
+        
         // Verifica se está desbloqueado individualmente (usa cache local para resposta imediata)
         val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
         val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
@@ -1026,6 +1043,12 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        
+        // Se estamos abrindo uma activity permitida (SettingsCheck ou AddProduct), não bloqueia
+        if (isOpeningAllowedActivity) {
+            Log.d(TAG, "🔓 Saída permitida (abrindo activity permitida)")
+            return
+        }
         
         // Verifica se está desbloqueado (usa cache local para resposta imediata)
         val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
