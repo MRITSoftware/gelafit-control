@@ -551,13 +551,15 @@ class SupabaseManager {
      * @param deviceId ID único do dispositivo para filtrar comandos
      * @return Flow que emite DeviceCommand quando há comando pendente
      */
-    fun subscribeToRestartCommands(deviceId: String): Flow<DeviceCommand> {
+    fun subscribeToRestartCommands(deviceId: String): kotlinx.coroutines.flow.Flow<DeviceCommand> {
         return kotlinx.coroutines.flow.flow {
             var lastCommandId: String? = null
             
             while (true) {
                 try {
-                    val command = getRestartAppCommand(deviceId)
+                    val command = withContext(Dispatchers.IO) {
+                        getRestartAppCommand(deviceId)
+                    }
                     
                     // Só emite se há comando novo (não processado ainda)
                     if (command != null && command.id != lastCommandId) {
