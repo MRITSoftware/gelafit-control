@@ -141,22 +141,20 @@ class KioskModeService : Service() {
                 val isActive: Boolean
                 val kioskMode: Boolean
                 
+                // SEMPRE verifica o banco quando kiosk_mode pode ter mudado (a cada 30 segundos)
+                // Isso garante resposta rápida quando setado manualmente
+                val status = supabaseManager.getDeviceStatus(deviceId)
+                isActive = status?.isActive ?: false
+                kioskMode = status?.kioskMode ?: false
+                
+                // Atualiza cache local sempre que verifica
+                preferenceManager.saveIsActiveCached(isActive)
+                preferenceManager.saveKioskModeCached(kioskMode)
                 if (needsSync) {
-                    Log.d(TAG, "🔄 Sincronizando status com Supabase (cache expirado)...")
-                    val status = supabaseManager.getDeviceStatus(deviceId)
-                    isActive = status?.isActive ?: false
-                    kioskMode = status?.kioskMode ?: false
-                    
-                    // Atualiza cache local
-                    preferenceManager.saveIsActiveCached(isActive)
-                    preferenceManager.saveKioskModeCached(kioskMode)
                     preferenceManager.saveStatusLastSync(now)
-                    Log.d(TAG, "✅ Cache atualizado: is_active=$isActive, kiosk_mode=$kioskMode")
+                    Log.d(TAG, "✅ Cache atualizado (sync completo): is_active=$isActive, kiosk_mode=$kioskMode")
                 } else {
-                    // Usa cache local (mais rápido e economiza requisições)
-                    isActive = preferenceManager.getIsActiveCached()
-                    kioskMode = preferenceManager.getKioskModeCached()
-                    Log.d(TAG, "📦 Usando cache local: is_active=$isActive, kiosk_mode=$kioskMode")
+                    Log.d(TAG, "📦 Status verificado: is_active=$isActive, kiosk_mode=$kioskMode")
                 }
 
                 val changed = (lastIsActive != isActive) || (lastKioskMode != kioskMode)
@@ -201,7 +199,8 @@ class KioskModeService : Service() {
                     Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 }
 
-                delay(CHECK_INTERVAL_MS)
+                // Verifica a cada 30 segundos (resposta rápida quando setado manualmente)
+                delay(30 * 1000L)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro no monitoramento: ${e.message}", e)
                 delay(ERROR_RETRY_DELAY_MS)
@@ -224,13 +223,39 @@ class KioskModeService : Service() {
         
         Log.d(TAG, "🔒 Aplicando modo kiosk para: $targetPackage")
         
-        // Verifica se o app está rodando
-        if (!isAppRunning(targetPackage)) {
-            Log.d(TAG, "📱 App não está rodando. Abrindo...")
-            val appLauncher = AppLauncher(this)
-            appLauncher.launchApp(targetPackage)
-        } else {
-            Log.d(TAG, "✅ App já está rodando")
+        // FORÇA a abertura do app (mesmo que já esteja rodando, garante que está em foreground)
+        serviceScope.launch {
+            try {
+                Log.d(TAG, "📱 Abrindo app configurado: $targetPackage")
+                val appLauncher = AppLauncher(this@KioskModeService)
+                
+                // Tenta abrir o app múltiplas vezes para garantir
+                var success = false
+                for (i in 1..3) {
+                    success = appLauncher.launchApp(targetPackage)
+                    if (success) {
+                        Log.d(TAG, "✅ App aberto com sucesso na tentativa $i")
+                        break
+                    } else {
+                        Log.w(TAG, "⚠️ Tentativa $i falhou, tentando novamente...")
+                        delay(500)
+                    }
+                }
+                
+                if (!success) {
+                    Log.e(TAG, "❌ Falha ao abrir app após 3 tentativas")
+                }
+                
+                // Aguarda um pouco e verifica se está rodando
+                delay(1000)
+                if (isAppRunning(targetPackage)) {
+                    Log.d(TAG, "✅ App confirmado rodando")
+                } else {
+                    Log.w(TAG, "⚠️ App não está rodando após abertura")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao abrir app: ${e.message}", e)
+            }
         }
         
         // Inicia overlay para interceptar gestos (requer permissão SYSTEM_ALERT_WINDOW)
@@ -398,28 +423,23 @@ class KioskModeService : Service() {
             return
         }
         
-        if (!isAppRunning(targetPackage)) {
-            Log.d(TAG, "⚠️⚠️⚠️ APP MINIMIZADO COM KIOSK ATIVO! REABRINDO IMEDIATAMENTE...")
-            val appLauncher = AppLauncher(this)
-            
-            // Tenta múltiplas vezes rapidamente
-            appLauncher.launchApp(targetPackage)
-            
-            // Aguarda 200ms e tenta novamente (muito mais rápido)
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (!isAppRunning(targetPackage)) {
-                    Log.d(TAG, "⚠️ Tentativa 2: Reabrindo app...")
-                    appLauncher.launchApp(targetPackage)
+        serviceScope.launch {
+            if (!isAppRunning(targetPackage)) {
+                Log.d(TAG, "⚠️⚠️⚠️ APP MINIMIZADO COM KIOSK ATIVO! REABRINDO IMEDIATAMENTE...")
+                val appLauncher = AppLauncher(this@KioskModeService)
+                
+                // Tenta múltiplas vezes rapidamente
+                for (i in 1..3) {
+                    val success = appLauncher.launchApp(targetPackage)
+                    if (success && isAppRunning(targetPackage)) {
+                        Log.d(TAG, "✅ App reaberto com sucesso na tentativa $i")
+                        break
+                    } else {
+                        Log.w(TAG, "⚠️ Tentativa $i falhou, tentando novamente...")
+                        delay(300)
+                    }
                 }
-            }, 200)
-            
-            // Aguarda mais 500ms e tenta novamente
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (!isAppRunning(targetPackage)) {
-                    Log.d(TAG, "⚠️ Tentativa 3: Reabrindo app...")
-                    appLauncher.launchApp(targetPackage)
-                }
-            }, 700)
+            }
         }
     }
     
