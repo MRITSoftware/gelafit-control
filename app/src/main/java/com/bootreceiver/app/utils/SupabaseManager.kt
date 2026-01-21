@@ -372,8 +372,10 @@ class SupabaseManager {
                         }
                     }
                 } catch (e: Exception) {
-                    if (!e.message?.contains("No rows") == true && 
-                        !e.message?.contains("not found") == true) {
+                    // Só loga se a mensagem não for de “nenhuma linha encontrada”
+                    val noRows = e.message?.contains("No rows") == true
+                    val notFound = e.message?.contains("not found") == true
+                    if (!noRows && !notFound) {
                         Log.w(TAG, "Erro ao verificar email existente: ${e.message}")
                     }
                 }
