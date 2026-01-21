@@ -17,8 +17,9 @@ import com.bootreceiver.app.utils.DeviceIdManager
 import com.bootreceiver.app.utils.PreferenceManager
 import com.bootreceiver.app.utils.SupabaseManager
 import com.bootreceiver.app.utils.DeviceCommand
+import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.postgresChanges
+import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -148,45 +149,35 @@ class AppRestartMonitorService : Service() {
             
             // Cria canal Realtime para device_commands filtrado por device_id
             val channel = supabaseManager.client.realtime.channel("device_commands_$deviceId")
-            
-            // Inscreve em mudanças na tabela device_commands
-            val subscription = channel.postgresChanges<DeviceCommand>(
+            channel.subscribe()
+            Log.d(TAG, "✅ Realtime conectado! Monitorando comandos em tempo real...")
+
+            val changes = channel.postgresChangeFlow<DeviceCommand>(
                 schema = "public",
                 table = "device_commands",
-                filter = "device_id=eq.$deviceId"
-            ) {
-                select = "*"
-            }.collect { change ->
+                filter = { eq("device_id", deviceId) }
+            )
+
+            changes.collect { action ->
                 try {
-                    when (change) {
-                        is io.github.jan.supabase.realtime.PostgresChange.Insert -> {
-                            val command = change.newRecord
+                    when (action) {
+                        is PostgresAction.Insert -> {
+                            val command = action.record
                             if (command.command == "restart_app" && !command.executed) {
                                 Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                                 Log.d(TAG, "⚠️⚠️⚠️ NOVO COMANDO DE REINICIAR APP RECEBIDO VIA REALTIME! ⚠️⚠️⚠️")
                                 Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                                
-                                // Processa o comando
                                 serviceScope.launch {
                                     processRestartCommand(command)
                                 }
                             }
                         }
-                        is io.github.jan.supabase.realtime.PostgresChange.Update -> {
-                            // Ignora updates (comandos já executados)
-                        }
-                        else -> {
-                            // Ignora outros tipos de mudanças
-                        }
+                        else -> { /* ignore */ }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Erro ao processar mudança Realtime: ${e.message}", e)
                 }
             }
-            
-            // Conecta ao canal
-            channel.subscribe()
-            Log.d(TAG, "✅ Realtime conectado! Monitorando comandos em tempo real...")
             
             // Fallback: verifica uma vez a cada 5 minutos se há comandos pendentes (caso Realtime falhe)
             while (isRunning) {
