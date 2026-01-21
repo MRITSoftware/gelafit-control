@@ -7,10 +7,15 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChanges
+import io.github.jan.supabase.realtime.RealtimeChannel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 
@@ -29,6 +34,9 @@ class SupabaseManager {
         install(Postgrest)
         install(Realtime) { }
     }
+    
+    // Canais Realtime ativos (para poder desconectar depois)
+    private val activeChannels = mutableMapOf<String, RealtimeChannel>()
     
     /**
      * Verifica se há um comando de reiniciar app pendente
@@ -502,78 +510,136 @@ class SupabaseManager {
     }
     
     /**
-     * Cria um Flow que verifica mudanças periodicamente na tabela devices
-     * Por enquanto usa polling otimizado (a cada 2 segundos) até Realtime estar disponível
+     * Cria um Flow que escuta mudanças REALTIME na tabela devices usando WebSocket
+     * Usa Supabase Realtime verdadeiro (não polling) - muito mais eficiente
      * 
      * @param deviceId ID único do dispositivo para filtrar mudanças
-     * @return Flow que emite DeviceStatus periodicamente
+     * @return Flow que emite DeviceStatus quando há mudanças no banco
      */
-    fun subscribeToDeviceChanges(deviceId: String): Flow<DeviceStatus> {
-        return kotlinx.coroutines.flow.flow {
-            var lastStatus: DeviceStatus? = null
+    fun subscribeToDeviceChanges(deviceId: String): Flow<DeviceStatus> = callbackFlow {
+        val channelName = "device_changes_$deviceId"
+        val channel = client.channel(channelName)
+        activeChannels[channelName] = channel
+        
+        try {
+            Log.d(TAG, "🔌 Conectando ao Realtime para dispositivo: $deviceId")
             
-            while (true) {
+            // Escuta mudanças UPDATE na tabela devices com filtro por device_id
+            channel.postgresChanges<Device>(
+                schema = "public",
+                table = "devices",
+                filter = "device_id=eq.$deviceId"
+            ) { change ->
                 try {
-                    val status = getDeviceStatus(deviceId)
-                    val currentStatus = status ?: DeviceStatus(isActive = false, kioskMode = false)
+                    Log.d(TAG, "🔄 REALTIME: Mudança detectada no dispositivo $deviceId - Evento: ${change.eventType}")
                     
-                    // Só emite se mudou (otimização)
-                    if (lastStatus == null || lastStatus != currentStatus) {
-                        Log.d(TAG, "🔄 Status atualizado - is_active: ${currentStatus.isActive}, modo_kiosk: ${currentStatus.kioskMode}")
-                        emit(currentStatus)
-                        lastStatus = currentStatus
+                    val device = change.newRecord ?: change.oldRecord
+                    if (device != null) {
+                        val status = DeviceStatus(
+                            isActive = device.is_active,
+                            kioskMode = device.kiosk_mode ?: false
+                        )
+                        Log.d(TAG, "📡 Emitindo status via Realtime - is_active: ${status.isActive}, modo_kiosk: ${status.kioskMode}")
+                        trySend(status)
+                    } else {
+                        // Se não há dados no evento, busca do banco
+                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                            val status = getDeviceStatus(deviceId)
+                            trySend(status ?: DeviceStatus(isActive = false, kioskMode = false))
+                        }
                     }
-                    
-                    kotlinx.coroutines.delay(2000) // Verifica a cada 2 segundos
                 } catch (e: Exception) {
-                    Log.e(TAG, "❌ Erro ao verificar status: ${e.message}", e)
-                    kotlinx.coroutines.delay(5000) // Em caso de erro, aguarda mais tempo
+                    Log.e(TAG, "❌ Erro ao processar mudança Realtime: ${e.message}", e)
                 }
+            }
+            
+            // Subscribe ao canal
+            channel.subscribe()
+            Log.d(TAG, "✅ Subscrito ao Realtime para dispositivo: $deviceId")
+            
+            // Mantém o Flow aberto até ser cancelado
+            awaitClose {
+                channel.unsubscribe()
+                activeChannels.remove(channelName)
+                Log.d(TAG, "🔌 Desconectado do Realtime para dispositivo: $deviceId")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao criar subscription Realtime: ${e.message}", e)
+            activeChannels.remove(channelName)
+            close(e)
+        }
+    }
+    
+    /**
+     * Remove a subscrição de mudanças Realtime
+     * 
+     * @param deviceId ID único do dispositivo
+     */
+    suspend fun unsubscribeFromDeviceChanges(deviceId: String) {
+        val channelName = "device_changes_$deviceId"
+        val channel = activeChannels[channelName]
+        if (channel != null) {
+            try {
+                channel.unsubscribe()
+                activeChannels.remove(channelName)
+                Log.d(TAG, "🔌 Desconectado manualmente do Realtime para dispositivo: $deviceId")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro ao desconectar do Realtime: ${e.message}", e)
             }
         }
     }
     
     /**
-     * Remove a subscrição de mudanças
-     * Nota: O Flow é automaticamente cancelado quando o collector é cancelado
-     * 
-     * @param deviceId ID único do dispositivo (mantido para compatibilidade)
-     */
-    suspend fun unsubscribeFromDeviceChanges(deviceId: String) {
-        // O Flow é automaticamente cancelado quando o collector é cancelado
-        Log.d(TAG, "🔌 Subscription será cancelada automaticamente quando o Flow for cancelado")
-    }
-    
-    /**
-     * Cria um Flow que verifica comandos de reiniciar periodicamente
-     * Usa polling otimizado (a cada 1 segundo) para detectar comandos rapidamente
+     * Cria um Flow que escuta comandos de reiniciar REALTIME na tabela device_commands usando WebSocket
+     * Usa Supabase Realtime verdadeiro (não polling) - muito mais eficiente
      * 
      * @param deviceId ID único do dispositivo para filtrar comandos
      * @return Flow que emite DeviceCommand quando há comando pendente
      */
-    fun subscribeToRestartCommands(deviceId: String): kotlinx.coroutines.flow.Flow<DeviceCommand> {
-        return kotlinx.coroutines.flow.flow {
-            var lastCommandId: String? = null
+    fun subscribeToRestartCommands(deviceId: String): kotlinx.coroutines.flow.Flow<DeviceCommand> = callbackFlow {
+        val channelName = "restart_commands_$deviceId"
+        val channel = client.channel(channelName)
+        activeChannels[channelName] = channel
+        
+        try {
+            Log.d(TAG, "🔌 Conectando ao Realtime para comandos de reiniciar: $deviceId")
             
-            while (true) {
+            // Escuta INSERT na tabela device_commands com filtro por device_id e command
+            channel.postgresChanges<DeviceCommand>(
+                schema = "public",
+                table = "device_commands",
+                filter = "device_id=eq.$deviceId"
+            ) { change ->
                 try {
-                    val command = withContext(Dispatchers.IO) {
-                        getRestartAppCommand(deviceId)
-                    }
+                    Log.d(TAG, "🔄 REALTIME: Comando detectado - Evento: ${change.eventType}")
                     
-                    // Só emite se há comando novo (não processado ainda)
-                    if (command != null && command.id != lastCommandId) {
-                        Log.d(TAG, "🔄 Comando de reiniciar detectado: ${command.id}")
-                        emit(command)
-                        lastCommandId = command.id
+                    // Só processa INSERT de comandos não executados
+                    if (change.eventType == "INSERT") {
+                        val command = change.newRecord
+                        if (command != null && command.command == "restart_app" && !command.executed) {
+                            Log.d(TAG, "📡 Emitindo comando de reiniciar via Realtime: ${command.id}")
+                            trySend(command)
+                        }
                     }
-                    
-                    kotlinx.coroutines.delay(1000) // Verifica a cada 1 segundo (muito mais rápido que 5 minutos)
                 } catch (e: Exception) {
-                    Log.e(TAG, "❌ Erro ao verificar comandos: ${e.message}", e)
-                    kotlinx.coroutines.delay(5000) // Em caso de erro, aguarda mais tempo
+                    Log.e(TAG, "❌ Erro ao processar comando Realtime: ${e.message}", e)
                 }
             }
+            
+            // Subscribe ao canal
+            channel.subscribe()
+            Log.d(TAG, "✅ Subscrito ao Realtime para comandos de reiniciar: $deviceId")
+            
+            // Mantém o Flow aberto até ser cancelado
+            awaitClose {
+                channel.unsubscribe()
+                activeChannels.remove(channelName)
+                Log.d(TAG, "🔌 Desconectado do Realtime para comandos: $deviceId")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao criar subscription Realtime para comandos: ${e.message}", e)
+            activeChannels.remove(channelName)
+            close(e)
         }
     }
     
