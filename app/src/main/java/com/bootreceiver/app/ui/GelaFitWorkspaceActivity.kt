@@ -696,34 +696,48 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         serviceScope.launch {
             // Verifica status inicial imediatamente
             try {
-                // Usa cache primeiro para resposta imediata
+                // Usa cache primeiro para resposta IMEDIATA (sem esperar banco)
                 val cachedIsActive = preferenceManager.getIsActiveCached()
                 val cachedKioskMode = preferenceManager.getKioskModeCached()
                 isActive = cachedIsActive
                 kioskMode = cachedKioskMode
+                
+                // Aplica configurações IMEDIATAMENTE usando cache (resposta instantânea)
                 applyInitialSettings()
 
-                // Sincroniza com Supabase se último sync passou de 15 minutos OU se nunca foi sincronizado (lastSync = 0)
+                // Sincroniza com Supabase em background (não bloqueia a UI)
                 val now = System.currentTimeMillis()
                 val lastSync = preferenceManager.getStatusLastSync()
                 val needsSync = lastSync == 0L || (now - lastSync > STATUS_SYNC_INTERVAL_MS)
 
                 if (needsSync) {
-                    val status = supabaseManager.getDeviceStatus(deviceId)
-                    val freshIsActive = status?.isActive
-                    val freshKiosk = status?.kioskMode
-                    Log.d(TAG, "Status inicial (sync) - is_active: $freshIsActive, modo_kiosk: $freshKiosk")
+                    // Sincroniza em background sem bloquear
+                    launch(Dispatchers.IO) {
+                        try {
+                            val status = supabaseManager.getDeviceStatus(deviceId)
+                            val freshIsActive = status?.isActive
+                            val freshKiosk = status?.kioskMode
+                            Log.d(TAG, "Status inicial (sync background) - is_active: $freshIsActive, modo_kiosk: $freshKiosk")
 
-                    if (freshIsActive != null) {
-                        isActive = freshIsActive
-                        preferenceManager.saveIsActiveCached(freshIsActive)
+                            if (freshIsActive != null && freshIsActive != isActive) {
+                                isActive = freshIsActive
+                                preferenceManager.saveIsActiveCached(freshIsActive)
+                                withContext(Dispatchers.Main) {
+                                    applyInitialSettings()
+                                }
+                            }
+                            if (freshKiosk != null && freshKiosk != kioskMode) {
+                                kioskMode = freshKiosk
+                                preferenceManager.saveKioskModeCached(freshKiosk)
+                                withContext(Dispatchers.Main) {
+                                    applyInitialSettings()
+                                }
+                            }
+                            preferenceManager.saveStatusLastSync(now)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Erro ao sincronizar status inicial: ${e.message}", e)
+                        }
                     }
-                    if (freshKiosk != null) {
-                        kioskMode = freshKiosk
-                        preferenceManager.saveKioskModeCached(freshKiosk)
-                    }
-                    preferenceManager.saveStatusLastSync(now)
-                    applyInitialSettings()
                 } else {
                     Log.d(TAG, "Usando cache recente (menos de 15 min); último sync: ${lastSync}")
                 }
@@ -827,11 +841,14 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         updateUnlockCircleVisibility()
         
         if (isActive == true) {
+            // Aplica bloqueio e modo kiosk IMEDIATAMENTE quando is_active = true
             applyAppBlocking()
             enableGelaFitKioskMode() // Mantém GelaFit Control em modo kiosk quando is_active = true
             showAppsGrid() // Sempre mostra o grid quando is_active está ativo
+            Log.d(TAG, "✅ Configurações iniciais aplicadas: is_active=true, modo kiosk do GelaFit Control ativado")
         } else {
             disableGelaFitKioskMode() // Remove modo kiosk do GelaFit Control quando is_active = false
+            removeAppBlocking()
             hideAppsGrid()
         }
         

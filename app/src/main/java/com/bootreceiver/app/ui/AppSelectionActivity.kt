@@ -351,7 +351,7 @@ class AppSelectionActivity : AppCompatActivity() {
     }
     
     /**
-     * Salva o app selecionado e fecha a activity
+     * Salva o app selecionado e abre o GelaFit Workspace imediatamente
      */
     private fun selectApp(packageName: String, appName: String) {
         Log.d(TAG, "App selecionado: $appName ($packageName)")
@@ -364,16 +364,11 @@ class AppSelectionActivity : AppCompatActivity() {
         currentApps.add(packageName)
         preferenceManager.saveSelectedAppsList(currentApps)
         
-        Toast.makeText(
-            this,
-            "App configurado: $appName\nO app será aberto automaticamente no próximo boot.",
-            Toast.LENGTH_LONG
-        ).show()
-        
-        // Aguarda um pouco e fecha a activity
-        listView.postDelayed({
-            finish()
-        }, 2000)
+        // Abre o GelaFit Workspace imediatamente (sem delay)
+        val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        startActivity(intent)
+        finish()
     }
     
     /**
