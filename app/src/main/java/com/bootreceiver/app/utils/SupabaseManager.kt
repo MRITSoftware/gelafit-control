@@ -454,10 +454,11 @@ class SupabaseManager {
             
             if (existingDevice != null) {
                 // Dispositivo já existe, atualiza last_seen e unit_name se fornecido
-                // IMPORTANTE: NUNCA altera o device_id, kiosk_mode ou is_active - sempre mantém os valores originais
-                Log.d(TAG, "Dispositivo já existe (device_id: ${existingDevice.device_id}, kiosk_mode: ${existingDevice.kiosk_mode}, is_active: ${existingDevice.is_active}). Atualizando apenas unit_name e last_seen...")
+                // IMPORTANTE: NUNCA altera o device_id. Também força kiosk_mode = false para não ativar sozinho em reinstalação/novo email
+                Log.d(TAG, "Dispositivo já existe (device_id: ${existingDevice.device_id}, kiosk_mode: ${existingDevice.kiosk_mode}, is_active: ${existingDevice.is_active}). Atualizando unit_name/last_seen e resetando kiosk_mode=false...")
                 val updateData = mutableMapOf<String, Any>(
-                    "last_seen" to java.time.Instant.now().toString()
+                    "last_seen" to java.time.Instant.now().toString(),
+                    "kiosk_mode" to false // garante que não volte ativo automaticamente
                 )
                 
                 if (unitName != null && unitName.isNotBlank()) {
@@ -465,7 +466,6 @@ class SupabaseManager {
                 }
                 
                 // CRÍTICO: Sempre atualiza pelo device_id original do banco, nunca cria novo
-                // NÃO altera kiosk_mode ou is_active - mantém os valores existentes
                 client.from("devices")
                     .update(updateData) {
                         filter {
@@ -473,7 +473,7 @@ class SupabaseManager {
                         }
                     }
                 
-                Log.d(TAG, "✅ Dispositivo atualizado com sucesso (device_id mantido: ${existingDevice.device_id}, kiosk_mode preservado: ${existingDevice.kiosk_mode}, is_active preservado: ${existingDevice.is_active})")
+                Log.d(TAG, "✅ Dispositivo atualizado (device_id mantido: ${existingDevice.device_id}), kiosk_mode forçado para false, is_active preservado: ${existingDevice.is_active}")
             } else {
                 // Novo dispositivo, cria registro
                 Log.d(TAG, "Criando novo registro de dispositivo com device_id: $deviceId")
