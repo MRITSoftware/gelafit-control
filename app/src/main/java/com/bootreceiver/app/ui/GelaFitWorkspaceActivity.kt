@@ -177,53 +177,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     
     
     /**
-     * Fixa o GelaFit Control em modo kiosk (seta is_active = true)
-     */
-    private fun fixGelaFitKiosk() {
-        serviceScope.launch {
-            try {
-                val success = withContext(Dispatchers.IO) {
-                    supabaseManager.updateIsActive(deviceId, true)
-                }
-                
-                if (success) {
-                    // Atualiza cache local e reseta estado de desbloqueio
-                    preferenceManager.saveIsActiveCached(true)
-                    preferenceManager.saveGelaFitUnlocked(false) // Reseta desbloqueio ao fixar
-                    preferenceManager.saveStatusLastSync(System.currentTimeMillis())
-                    
-                    // Atualiza variáveis locais
-                    isActive = true
-                    
-                    // Aplica modo kiosk do GelaFit Control
-                    enableGelaFitKioskMode()
-                    applyAppBlocking()
-                    showAppsGrid()
-                    
-                    // Atualiza UI
-                    runOnUiThread {
-                        vibrateShort()
-                        updateKioskButtonVisibility(true, kioskMode == true)
-                        showFixGelaFitButton() // Esconde o botão
-                        Toast.makeText(this@GelaFitWorkspaceActivity, "GelaFit Control fixado em modo kiosk", Toast.LENGTH_LONG).show()
-                    }
-                    
-                    Log.d(TAG, "✅ GelaFit Control fixado (is_active=true)")
-                } else {
-                    runOnUiThread {
-                        Toast.makeText(this@GelaFitWorkspaceActivity, "Erro ao fixar GelaFit Control", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro ao fixar GelaFit Control: ${e.message}", e)
-                runOnUiThread {
-                    Toast.makeText(this@GelaFitWorkspaceActivity, "Erro: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    /**
      * Configura o círculo de desbloqueio visível no centro da tela
      */
     private fun setupUnlockCircle() {
