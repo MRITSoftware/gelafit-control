@@ -8,13 +8,18 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.postgresChanges
+import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.RealtimeChannel
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.buildPostgresChangeFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -525,40 +530,51 @@ class SupabaseManager {
             Log.d(TAG, "🔌 Conectando ao Realtime para dispositivo: $deviceId")
             
             // Escuta mudanças UPDATE na tabela devices com filtro por device_id
-            channel.postgresChanges<Device>(
+            val postgresFlow = channel.postgresChangeFlow<Device>(
                 schema = "public",
                 table = "devices",
-                filter = "device_id=eq.$deviceId"
-            ) { change ->
-                try {
-                    Log.d(TAG, "🔄 REALTIME: Mudança detectada no dispositivo $deviceId - Evento: ${change.eventType}")
-                    
-                    val device = change.newRecord ?: change.oldRecord
-                    if (device != null) {
-                        val status = DeviceStatus(
-                            isActive = device.is_active,
-                            kioskMode = device.kiosk_mode ?: false
-                        )
-                        Log.d(TAG, "📡 Emitindo status via Realtime - is_active: ${status.isActive}, modo_kiosk: ${status.kioskMode}")
-                        trySend(status)
-                    } else {
-                        // Se não há dados no evento, busca do banco
-                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                            val status = getDeviceStatus(deviceId)
-                            trySend(status ?: DeviceStatus(isActive = false, kioskMode = false))
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "❌ Erro ao processar mudança Realtime: ${e.message}", e)
+                filter = buildPostgresChangeFilter {
+                    eq("device_id", deviceId)
                 }
-            }
+            )
             
-            // Subscribe ao canal
+            // Subscribe ao canal primeiro
             channel.subscribe()
             Log.d(TAG, "✅ Subscrito ao Realtime para dispositivo: $deviceId")
             
+            // Coleta mudanças do Flow
+            val job = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                postgresFlow.collect { change ->
+                    try {
+                        Log.d(TAG, "🔄 REALTIME: Mudança detectada no dispositivo $deviceId - Evento: ${change.action}")
+                        
+                        when (change.action) {
+                            is PostgresAction.Update -> {
+                                val device = change.newRecord
+                                if (device != null) {
+                                    val status = DeviceStatus(
+                                        isActive = device.is_active,
+                                        kioskMode = device.kiosk_mode ?: false
+                                    )
+                                    Log.d(TAG, "📡 Emitindo status via Realtime - is_active: ${status.isActive}, modo_kiosk: ${status.kioskMode}")
+                                    trySend(status)
+                                }
+                            }
+                            else -> {
+                                // Para INSERT ou DELETE, busca status atual do banco
+                                val status = getDeviceStatus(deviceId)
+                                trySend(status ?: DeviceStatus(isActive = false, kioskMode = false))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro ao processar mudança Realtime: ${e.message}", e)
+                    }
+                }
+            }
+            
             // Mantém o Flow aberto até ser cancelado
             awaitClose {
+                job.cancel()
                 channel.unsubscribe()
                 activeChannels.remove(channelName)
                 Log.d(TAG, "🔌 Desconectado do Realtime para dispositivo: $deviceId")
@@ -604,34 +620,42 @@ class SupabaseManager {
         try {
             Log.d(TAG, "🔌 Conectando ao Realtime para comandos de reiniciar: $deviceId")
             
-            // Escuta INSERT na tabela device_commands com filtro por device_id e command
-            channel.postgresChanges<DeviceCommand>(
+            // Escuta INSERT na tabela device_commands com filtro por device_id
+            val postgresFlow = channel.postgresChangeFlow<DeviceCommand>(
                 schema = "public",
                 table = "device_commands",
-                filter = "device_id=eq.$deviceId"
-            ) { change ->
-                try {
-                    Log.d(TAG, "🔄 REALTIME: Comando detectado - Evento: ${change.eventType}")
-                    
-                    // Só processa INSERT de comandos não executados
-                    if (change.eventType == "INSERT") {
-                        val command = change.newRecord
-                        if (command != null && command.command == "restart_app" && !command.executed) {
-                            Log.d(TAG, "📡 Emitindo comando de reiniciar via Realtime: ${command.id}")
-                            trySend(command)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "❌ Erro ao processar comando Realtime: ${e.message}", e)
+                filter = buildPostgresChangeFilter {
+                    eq("device_id", deviceId)
                 }
-            }
+            )
             
-            // Subscribe ao canal
+            // Subscribe ao canal primeiro
             channel.subscribe()
             Log.d(TAG, "✅ Subscrito ao Realtime para comandos de reiniciar: $deviceId")
             
+            // Coleta mudanças do Flow
+            val job = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                postgresFlow.collect { change ->
+                    try {
+                        Log.d(TAG, "🔄 REALTIME: Comando detectado - Evento: ${change.action}")
+                        
+                        // Só processa INSERT de comandos não executados
+                        if (change.action is PostgresAction.Insert) {
+                            val command = change.newRecord
+                            if (command != null && command.command == "restart_app" && !command.executed) {
+                                Log.d(TAG, "📡 Emitindo comando de reiniciar via Realtime: ${command.id}")
+                                trySend(command)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro ao processar comando Realtime: ${e.message}", e)
+                    }
+                }
+            }
+            
             // Mantém o Flow aberto até ser cancelado
             awaitClose {
+                job.cancel()
                 channel.unsubscribe()
                 activeChannels.remove(channelName)
                 Log.d(TAG, "🔌 Desconectado do Realtime para comandos: $deviceId")
