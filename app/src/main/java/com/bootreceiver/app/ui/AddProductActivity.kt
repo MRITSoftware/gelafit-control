@@ -103,29 +103,39 @@ class AddProductActivity : AppCompatActivity() {
     }
     
     private fun toggleAppSelection(app: AppInfo) {
+        val preferenceManager = PreferenceManager(this)
+        
         if (selectedApps.contains(app.packageName)) {
+            // Remove da seleção
             selectedApps.remove(app.packageName)
+            
+            // Remove da lista persistente
+            val currentApps = preferenceManager.getSelectedAppsList().toMutableSet()
+            currentApps.remove(app.packageName)
+            preferenceManager.saveSelectedAppsList(currentApps)
+            
+            Log.d(TAG, "App removido: ${app.name}")
         } else {
+            // Adiciona à seleção
             selectedApps.add(app.packageName)
+            
+            // Salva na lista persistente
+            val currentApps = preferenceManager.getSelectedAppsList().toMutableSet()
+            currentApps.add(app.packageName)
+            preferenceManager.saveSelectedAppsList(currentApps)
+            
+            // Notifica o GelaFitWorkspaceActivity para atualizar o grid imediatamente
+            val intent = Intent("com.bootreceiver.app.APP_ADDED_TO_GRID").apply {
+                putExtra("package_name", app.packageName)
+            }
+            sendBroadcast(intent)
+            
+            Log.d(TAG, "App adicionado ao grid: ${app.name}")
+            Toast.makeText(this, "${app.name} adicionado ao grid", Toast.LENGTH_SHORT).show()
         }
         
         // Atualiza a lista
         appsRecyclerView.adapter?.notifyDataSetChanged()
-        
-        // Salva a seleção (aqui você pode salvar em SharedPreferences ou Supabase)
-        saveSelectedApps()
-    }
-    
-    private fun saveSelectedApps() {
-        // Por enquanto, apenas salva o primeiro app selecionado como app principal
-        // Você pode expandir isso para salvar uma lista de apps
-        val preferenceManager = PreferenceManager(this)
-        val firstSelected = selectedApps.firstOrNull()
-        if (firstSelected != null) {
-            // Aqui você pode salvar a lista completa de apps selecionados
-            // Por enquanto, apenas logamos
-            Log.d(TAG, "Apps selecionados: ${selectedApps.joinToString()}")
-        }
     }
     
     data class AppInfo(

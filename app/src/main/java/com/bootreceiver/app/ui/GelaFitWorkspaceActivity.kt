@@ -1,7 +1,10 @@
 package com.bootreceiver.app.ui
 
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -61,6 +64,14 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     private val unlockRunnable = Runnable {
         performEmergencyUnlock()
     }
+    private val appAddedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val packageName = intent?.getStringExtra("package_name")
+            if (packageName != null) {
+                addAppToGrid(packageName)
+            }
+        }
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,14 +115,21 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         // Configura menu de 3 pontinhos
         setupMenuButton()
 
-        // Configura gesto de desbloqueio (canto superior direito, long press 5s)
-        setupUnlockHotspot()
+        // Configura gesto de desbloqueio (verifica se já está configurado, senão configura)
+        if (!preferenceManager.isUnlockHotspotConfigured()) {
+            showUnlockHotspotSetupDialog()
+        } else {
+            setupUnlockHotspot()
+        }
         
         // Mostra o grid por padrão (será ajustado conforme is_active)
         appsGridRecyclerView.visibility = View.VISIBLE
         
         // Inicia monitoramento de is_active e modo_kiosk (verifica status inicial também)
         startMonitoring()
+        
+        // Registra receiver para atualizar grid quando app for adicionado
+        registerReceiver(appAddedReceiver, IntentFilter("com.bootreceiver.app.APP_ADDED_TO_GRID"))
     }
     
     /**
@@ -152,7 +170,96 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             }
         }
     }
+    
+    /**
+     * Mostra/esconde botão de fixar GelaFit Kiosk
+     */
+    private fun showFixGelaFitButton() {
+        runOnUiThread {
+            val fixGelaFitButton = findViewById<Button>(R.id.fixGelaFitButton)
+            if (isActive == false) {
+                fixGelaFitButton.visibility = View.VISIBLE
+                fixGelaFitButton.setOnClickListener {
+                    fixGelaFitKiosk()
+                }
+            } else {
+                fixGelaFitButton.visibility = View.GONE
+            }
+        }
+    }
+    
+    /**
+     * Fixa o GelaFit Control em modo kiosk (seta is_active = true)
+     */
+    private fun fixGelaFitKiosk() {
+        serviceScope.launch {
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    supabaseManager.updateIsActive(deviceId, true)
+                }
+                
+                if (success) {
+                    // Atualiza cache local e reseta estado de desbloqueio
+                    preferenceManager.saveIsActiveCached(true)
+                    preferenceManager.saveGelaFitUnlocked(false) // Reseta desbloqueio ao fixar
+                    preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                    
+                    // Atualiza variáveis locais
+                    isActive = true
+                    
+                    // Aplica modo kiosk do GelaFit Control
+                    enableGelaFitKioskMode()
+                    applyAppBlocking()
+                    showAppsGrid()
+                    
+                    // Atualiza UI
+                    runOnUiThread {
+                        vibrateShort()
+                        updateKioskButtonVisibility(true, kioskMode == true)
+                        showFixGelaFitButton() // Esconde o botão
+                        Toast.makeText(this@GelaFitWorkspaceActivity, "GelaFit Control fixado em modo kiosk", Toast.LENGTH_LONG).show()
+                    }
+                    
+                    Log.d(TAG, "✅ GelaFit Control fixado (is_active=true)")
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@GelaFitWorkspaceActivity, "Erro ao fixar GelaFit Control", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao fixar GelaFit Control: ${e.message}", e)
+                runOnUiThread {
+                    Toast.makeText(this@GelaFitWorkspaceActivity, "Erro: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
+    /**
+     * Mostra diálogo para configurar área de desbloqueio na primeira vez
+     */
+    private fun showUnlockHotspotSetupDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Configurar Área de Desbloqueio")
+            .setMessage("Escolha onde você quer configurar a área de desbloqueio. Depois, toque e segure por 5 segundos nesse local para desbloquear.")
+            .setItems(arrayOf("Canto Superior Esquerdo", "Canto Superior Direito", "Canto Inferior Esquerdo", "Canto Inferior Direito")) { _, which ->
+                val positions = arrayOf("top_left", "top_right", "bottom_left", "bottom_right")
+                val positionNames = arrayOf("Canto Superior Esquerdo", "Canto Superior Direito", "Canto Inferior Esquerdo", "Canto Inferior Direito")
+                val selectedPosition = positions[which]
+                preferenceManager.saveUnlockHotspotPosition(selectedPosition)
+                setupUnlockHotspot()
+                
+                // Mostra instrução para testar
+                AlertDialog.Builder(this)
+                    .setTitle("Área Configurada")
+                    .setMessage("Área configurada: ${positionNames[which]}\n\nToque e segure por 5 segundos nessa área para desbloquear.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
     /**
      * Configura a área de desbloqueio por long press (5s - posição configurável)
      */
@@ -235,42 +342,158 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     }
 
     /**
-     * Desativa kiosk_mode e is_active imediatamente (desbloqueio de emergência)
+     * Desbloqueio individual - permite escolher o que desbloquear
      */
     private fun performEmergencyUnlock() {
+        runOnUiThread {
+            val options = mutableListOf<String>()
+            val actions = mutableListOf<() -> Unit>()
+            
+            // Opção para desbloquear GelaFit Control
+            if (isActive == true) {
+                options.add("Desbloquear GelaFit Control (permite minimizar)")
+                actions.add {
+                    unlockGelaFitControl()
+                }
+            }
+            
+            // Opção para desbloquear app escolhido
+            if (kioskMode == true) {
+                options.add("Desbloquear App Escolhido (permite minimizar)")
+                actions.add {
+                    unlockTargetApp()
+                }
+            }
+            
+            // Se ambos estão bloqueados, oferece desbloquear tudo
+            if (options.isEmpty()) {
+                options.add("Desbloquear Tudo")
+                actions.add {
+                    unlockEverything()
+                }
+            }
+            
+            if (options.isNotEmpty()) {
+                AlertDialog.Builder(this)
+                    .setTitle("Desbloquear")
+                    .setItems(options.toTypedArray()) { _, which ->
+                        actions[which]()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+        }
+    }
+    
+    /**
+     * Desbloqueia apenas o GelaFit Control (permite minimizar)
+     */
+    private fun unlockGelaFitControl() {
+        serviceScope.launch {
+            try {
+                // Atualiza Supabase
+                val activeResult = supabaseManager.updateIsActive(deviceId, false)
+                
+                // Atualiza cache local
+                preferenceManager.saveIsActiveCached(false)
+                preferenceManager.saveGelaFitUnlocked(true)
+                preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                
+                // Atualiza variáveis locais
+                isActive = false
+                
+                // Remove modo kiosk do GelaFit Control
+                disableGelaFitKioskMode()
+                removeAppBlocking()
+                hideAppsGrid()
+                
+                // Atualiza UI
+                runOnUiThread {
+                    vibrateShort()
+                    updateKioskButtonVisibility(false, kioskMode == true)
+                    showFixGelaFitButton()
+                    Toast.makeText(this@GelaFitWorkspaceActivity, "GelaFit Control desbloqueado - você pode minimizar", Toast.LENGTH_LONG).show()
+                }
+                
+                Log.d(TAG, "🔓 GelaFit Control desbloqueado (is_active=false). Supabase ok? active=$activeResult")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao desbloquear GelaFit Control: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
+     * Desbloqueia apenas o app escolhido (permite minimizar)
+     */
+    private fun unlockTargetApp() {
+        serviceScope.launch {
+            try {
+                // Atualiza Supabase
+                val kioskResult = supabaseManager.updateKioskMode(deviceId, false)
+                
+                // Atualiza cache local
+                preferenceManager.saveKioskModeCached(false)
+                preferenceManager.saveTargetAppUnlocked(true)
+                preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                
+                // Atualiza variáveis locais
+                kioskMode = false
+                
+                // Remove modo kiosk do app
+                disableKioskMode()
+                
+                // Atualiza UI
+                runOnUiThread {
+                    vibrateShort()
+                    updateKioskButtonVisibility(isActive == true, false)
+                    Toast.makeText(this@GelaFitWorkspaceActivity, "App escolhido desbloqueado - você pode minimizar", Toast.LENGTH_LONG).show()
+                }
+                
+                Log.d(TAG, "🔓 App escolhido desbloqueado (kiosk_mode=false). Supabase ok? kiosk=$kioskResult")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao desbloquear app escolhido: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
+     * Desbloqueia tudo (GelaFit Control e app escolhido)
+     */
+    private fun unlockEverything() {
         serviceScope.launch {
             try {
                 // Atualiza Supabase
                 val kioskResult = supabaseManager.updateKioskMode(deviceId, false)
                 val activeResult = supabaseManager.updateIsActive(deviceId, false)
-
+                
                 // Atualiza cache local
                 preferenceManager.saveKioskModeCached(false)
                 preferenceManager.saveIsActiveCached(false)
+                preferenceManager.saveGelaFitUnlocked(true)
+                preferenceManager.saveTargetAppUnlocked(true)
                 preferenceManager.saveStatusLastSync(System.currentTimeMillis())
-
+                
+                // Atualiza variáveis locais
+                isActive = false
+                kioskMode = false
+                
+                // Remove modo kiosk de tudo
+                disableGelaFitKioskMode()
+                disableKioskMode()
+                removeAppBlocking()
+                hideAppsGrid()
+                
                 // Atualiza UI
                 runOnUiThread {
                     vibrateShort()
                     updateKioskButtonVisibility(false, false)
-                    hideAppsGrid()
-                    AlertDialog.Builder(this@GelaFitWorkspaceActivity)
-                        .setTitle("Kiosk desativado")
-                        .setMessage("Modo kiosk e is_active desativados (desbloqueio de emergência).")
-                        .setPositiveButton("OK", null)
-                        .show()
+                    showFixGelaFitButton()
+                    Toast.makeText(this@GelaFitWorkspaceActivity, "Tudo desbloqueado", Toast.LENGTH_LONG).show()
                 }
-
-                Log.d(TAG, "🔓 Desbloqueio de emergência executado (kiosk=false, is_active=false). Supabase ok? kiosk=$kioskResult, active=$activeResult")
+                
+                Log.d(TAG, "🔓 Tudo desbloqueado (kiosk=false, is_active=false). Supabase ok? kiosk=$kioskResult, active=$activeResult")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao desbloquear: ${e.message}", e)
-                runOnUiThread {
-                    AlertDialog.Builder(this@GelaFitWorkspaceActivity)
-                        .setTitle("Erro")
-                        .setMessage("Falha ao desativar modo kiosk: ${e.message}")
-                        .setPositiveButton("OK", null)
-                        .show()
-                }
+                Log.e(TAG, "Erro ao desbloquear tudo: ${e.message}", e)
             }
         }
     }
@@ -303,8 +526,9 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                         }
                         
                         if (success) {
-                            // Atualiza cache local imediatamente
+                            // Atualiza cache local imediatamente e reseta estado de desbloqueio
                             preferenceManager.saveKioskModeCached(true)
+                            preferenceManager.saveTargetAppUnlocked(false) // Reseta desbloqueio ao ativar kiosk
                             preferenceManager.saveStatusLastSync(System.currentTimeMillis())
                             
                             // Atualiza variáveis locais da Activity imediatamente
@@ -422,16 +646,58 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      * Carrega apps selecionados para exibir no grid
      */
     private fun loadSelectedApps() {
-        val targetPackage = preferenceManager.getTargetPackageName() ?: return
-        
+        serviceScope.launch {
+            try {
+                val selectedPackages = withContext(Dispatchers.IO) {
+                    val savedApps = preferenceManager.getSelectedAppsList()
+                    if (savedApps.isEmpty()) {
+                        // Se não há lista salva, usa o app principal configurado
+                        val targetPackage = preferenceManager.getTargetPackageName()
+                        if (!targetPackage.isNullOrEmpty()) {
+                            setOf(targetPackage)
+                        } else {
+                            emptySet()
+                        }
+                    } else {
+                        savedApps
+                    }
+                }
+                
+                val appInfos = mutableListOf<AppInfo>()
+                selectedPackages.forEach { packageName ->
+                    try {
+                        val pm = packageManager
+                        val appInfo = pm.getApplicationInfo(packageName, 0)
+                        val appName = pm.getApplicationLabel(appInfo).toString()
+                        appInfos.add(AppInfo(appName, packageName))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "App não encontrado: $packageName")
+                    }
+                }
+                
+                selectedApps.clear()
+                selectedApps.addAll(appInfos)
+                appsGridRecyclerView.adapter?.notifyDataSetChanged()
+                
+                Log.d(TAG, "Apps carregados no grid: ${selectedApps.size}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao carregar apps selecionados: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
+     * Adiciona um app ao grid e atualiza imediatamente
+     */
+    fun addAppToGrid(packageName: String) {
         serviceScope.launch {
             try {
                 val appInfo = withContext(Dispatchers.IO) {
                     try {
                         val pm = packageManager
-                        val appInfo = pm.getApplicationInfo(targetPackage, 0)
-                        val appName = pm.getApplicationLabel(appInfo).toString()
-                        AppInfo(appName, targetPackage)
+                        val info = pm.getApplicationInfo(packageName, 0)
+                        val appName = pm.getApplicationLabel(info).toString()
+                        AppInfo(appName, packageName)
                     } catch (e: Exception) {
                         Log.e(TAG, "Erro ao carregar info do app: ${e.message}", e)
                         null
@@ -439,12 +705,24 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                 }
                 
                 if (appInfo != null) {
-                    selectedApps.clear()
-                    selectedApps.add(appInfo)
-                    appsGridRecyclerView.adapter?.notifyDataSetChanged()
+                    // Adiciona à lista local
+                    if (!selectedApps.any { it.packageName == packageName }) {
+                        selectedApps.add(appInfo)
+                    }
+                    
+                    // Salva na lista persistente
+                    val currentApps = preferenceManager.getSelectedAppsList().toMutableSet()
+                    currentApps.add(packageName)
+                    preferenceManager.saveSelectedAppsList(currentApps)
+                    
+                    // Atualiza o grid imediatamente
+                    runOnUiThread {
+                        appsGridRecyclerView.adapter?.notifyDataSetChanged()
+                        Log.d(TAG, "App adicionado ao grid: ${appInfo.name}")
+                    }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao carregar apps selecionados: ${e.message}", e)
+                Log.e(TAG, "Erro ao adicionar app ao grid: ${e.message}", e)
             }
         }
     }
@@ -536,8 +814,9 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                         Log.d(TAG, "Sincronizado status com Supabase (loop)")
                     }
                     
-                    // Atualiza visibilidade do botão de kiosk
+                    // Atualiza visibilidade dos botões
                     updateKioskButtonVisibility(currentIsActive == true, currentKioskMode == true)
+                    showFixGelaFitButton()
                     
                     // Se mudou o status, aplica as mudanças
                     if (isActive != currentIsActive || kioskMode != currentKioskMode) {
@@ -604,8 +883,9 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      * Aplica configurações iniciais baseadas no status atual
      */
     private fun applyInitialSettings() {
-        // Atualiza visibilidade do botão de kiosk
+        // Atualiza visibilidade dos botões
         updateKioskButtonVisibility(isActive == true, kioskMode == true)
+        showFixGelaFitButton()
         
         if (isActive == true) {
             applyAppBlocking()
@@ -829,6 +1109,9 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         super.onResume()
         Log.d(TAG, "onResume - Garantindo que tela do control está visível")
         
+        // Recarrega apps quando volta para a tela (caso tenha sido adicionado enquanto estava em outra tela)
+        loadSelectedApps()
+        
         // Se is_active está ativo, mostra o grid
         if (isActive == true) {
             showAppsGrid()
@@ -846,27 +1129,43 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         
-        // Se is_active está ativo, impede que a activity seja pausada (minimizada)
-        // Mas não abre o app automaticamente - apenas garante que a tela do control está visível
-        if (isActive == true && kioskMode != true) {
-            Log.d(TAG, "🔒 Tentativa de pausar bloqueada (is_active = true)")
+        // Verifica se está desbloqueado individualmente
+        val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
+        val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
+        
+        // Se is_active está ativo E não está desbloqueado, impede que a activity seja pausada (minimizada)
+        if (isActive == true && !gelafitUnlocked && kioskMode != true) {
+            Log.d(TAG, "🔒 Tentativa de pausar bloqueada (is_active = true, não desbloqueado)")
             // Não abre o app, apenas mostra o grid
             showAppsGrid()
-        } else if (kioskMode == true) {
-            // Quando modo_kiosk está ativo, abre o app automaticamente
+        } else if (kioskMode == true && !targetAppUnlocked) {
+            // Quando modo_kiosk está ativo E não está desbloqueado, abre o app automaticamente
             val targetPackage = preferenceManager.getTargetPackageName()
             if (!targetPackage.isNullOrEmpty()) {
                 openConfiguredApp(targetPackage)
             }
+        } else {
+            // Se está desbloqueado, permite minimizar normalmente
+            Log.d(TAG, "🔓 Pausa permitida (desbloqueado)")
         }
     }
     
     override fun onDestroy() {
         super.onDestroy()
         
-        // Se is_active está ativo, impede que a activity seja destruída
-        if (isActive == true) {
-            Log.d(TAG, "🔒 Tentativa de destruir bloqueada (is_active = true)")
+        // Desregistra receiver
+        try {
+            unregisterReceiver(appAddedReceiver)
+        } catch (e: Exception) {
+            // Receiver pode não estar registrado
+        }
+        
+        // Verifica se está desbloqueado
+        val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
+        
+        // Se is_active está ativo E não está desbloqueado, impede que a activity seja destruída
+        if (isActive == true && !gelafitUnlocked) {
+            Log.d(TAG, "🔒 Tentativa de destruir bloqueada (is_active = true, não desbloqueado)")
             // Recria a activity
             val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -879,17 +1178,21 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     }
     
     override fun onBackPressed() {
-        // Se is_active está ativo, bloqueia o botão voltar mas não abre o app
-        if (isActive == true && kioskMode != true) {
-            Log.d(TAG, "🔒 Botão voltar bloqueado (is_active = true)")
+        // Verifica se está desbloqueado individualmente
+        val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
+        val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
+        
+        // Se is_active está ativo E não está desbloqueado, bloqueia o botão voltar
+        if (isActive == true && !gelafitUnlocked && kioskMode != true) {
+            Log.d(TAG, "🔒 Botão voltar bloqueado (is_active = true, não desbloqueado)")
             // Apenas mostra o grid, não abre o app
             showAppsGrid()
             return
         }
         
-        // Se modo_kiosk está ativo, bloqueia o botão voltar e abre o app
-        if (kioskMode == true) {
-            Log.d(TAG, "🔒 Botão voltar bloqueado (modo_kiosk = true)")
+        // Se modo_kiosk está ativo E não está desbloqueado, bloqueia o botão voltar e abre o app
+        if (kioskMode == true && !targetAppUnlocked) {
+            Log.d(TAG, "🔒 Botão voltar bloqueado (modo_kiosk = true, não desbloqueado)")
             val targetPackage = preferenceManager.getTargetPackageName()
             if (!targetPackage.isNullOrEmpty()) {
                 openConfiguredApp(targetPackage)
@@ -897,7 +1200,7 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             return
         }
         
-        // Se is_active está desativado, permite comportamento normal
+        // Se está desbloqueado ou ambos estão desativados, permite comportamento normal
         super.onBackPressed()
     }
     

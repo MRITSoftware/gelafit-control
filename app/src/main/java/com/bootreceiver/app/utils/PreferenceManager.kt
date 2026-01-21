@@ -121,6 +121,36 @@ class PreferenceManager(context: Context) {
         return prefs.getString(KEY_UNLOCK_HOTSPOT_POSITION, "bottom_right") ?: "bottom_right"
     }
     
+    fun isUnlockHotspotConfigured(): Boolean {
+        return prefs.contains(KEY_UNLOCK_HOTSPOT_POSITION)
+    }
+    
+    // Lista de apps selecionados para o grid
+    fun saveSelectedAppsList(apps: Set<String>) {
+        prefs.edit().putStringSet(KEY_SELECTED_APPS_LIST, apps).apply()
+    }
+    
+    fun getSelectedAppsList(): Set<String> {
+        return prefs.getStringSet(KEY_SELECTED_APPS_LIST, emptySet()) ?: emptySet()
+    }
+    
+    // Estado de desbloqueio individual
+    fun saveGelaFitUnlocked(unlocked: Boolean) {
+        prefs.edit().putBoolean(KEY_GELAFIT_UNLOCKED, unlocked).apply()
+    }
+    
+    fun isGelaFitUnlocked(): Boolean {
+        return prefs.getBoolean(KEY_GELAFIT_UNLOCKED, false)
+    }
+    
+    fun saveTargetAppUnlocked(unlocked: Boolean) {
+        prefs.edit().putBoolean(KEY_TARGET_APP_UNLOCKED, unlocked).apply()
+    }
+    
+    fun isTargetAppUnlocked(): Boolean {
+        return prefs.getBoolean(KEY_TARGET_APP_UNLOCKED, false)
+    }
+    
     companion object {
         private const val PREFS_NAME = "BootReceiverPrefs"
         private const val KEY_TARGET_PACKAGE = "target_package_name"
@@ -131,5 +161,8 @@ class PreferenceManager(context: Context) {
         private const val KEY_CACHED_KIOSK_MODE = "cached_kiosk_mode"
         private const val KEY_STATUS_LAST_SYNC = "status_last_sync"
         private const val KEY_UNLOCK_HOTSPOT_POSITION = "unlock_hotspot_position"
+        private const val KEY_SELECTED_APPS_LIST = "selected_apps_list"
+        private const val KEY_GELAFIT_UNLOCKED = "gelafit_unlocked"
+        private const val KEY_TARGET_APP_UNLOCKED = "target_app_unlocked"
     }
 }
