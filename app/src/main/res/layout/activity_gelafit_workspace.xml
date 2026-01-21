@@ -89,16 +89,6 @@
 
     </LinearLayout>
 
-    <!-- Círculo visível para desbloqueio (long press 5s) -->
-    <View
-        android:id="@+id/unlockCircle"
-        android:layout_width="100dp"
-        android:layout_height="100dp"
-        android:layout_centerInParent="true"
-        android:contentDescription="Área de Desbloqueio"
-        android:background="@drawable/unlock_circle_background"
-        android:elevation="8dp"
-        android:visibility="visible" />
 
     <!-- Container para o app escolhido (quando modo_kiosk está ativo) -->
     <!-- O app escolhido será aberto e exibido sobre esta Activity -->

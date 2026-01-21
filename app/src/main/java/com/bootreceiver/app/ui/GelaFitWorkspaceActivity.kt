@@ -59,12 +59,8 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     private var isActive: Boolean? = null
     private var kioskMode: Boolean? = null
     private var isMonitoring = false
-    private var unlockHandler: Handler? = null
     private lateinit var appsGridRecyclerView: RecyclerView
     private val selectedApps = mutableListOf<AppInfo>()
-    private val unlockRunnable = Runnable {
-        performEmergencyUnlock()
-    }
     private val appAddedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val packageName = intent?.getStringExtra("package_name")
@@ -116,8 +112,7 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         // Configura menu de 3 pontinhos
         setupMenuButton()
 
-        // Configura círculo de desbloqueio (sempre visível no centro da tela)
-        setupUnlockCircle()
+        // Círculo de desbloqueio removido
         
         // Mostra o grid por padrão (será ajustado conforme is_active)
         appsGridRecyclerView.visibility = View.VISIBLE
@@ -176,76 +171,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     }
     
     
-    /**
-     * Configura o círculo de desbloqueio visível no centro da tela
-     */
-    private fun setupUnlockCircle() {
-        val unlockCircle = findViewById<View>(R.id.unlockCircle)
-        unlockHandler = Handler(Looper.getMainLooper())
-        
-        // Configura listener para toque e segurar por 5 segundos
-        unlockCircle.setOnTouchListener { view, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    // Inicia contagem de 5 segundos
-                    unlockHandler?.postDelayed(unlockRunnable, UNLOCK_HOLD_MS)
-                    // Feedback visual - muda opacidade do círculo enquanto segura
-                    view.alpha = 0.6f
-                    // Adiciona animação de pulsação
-                    view.animate()
-                        .scaleX(1.2f)
-                        .scaleY(1.2f)
-                        .setDuration(500)
-                        .start()
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // Cancela se soltar antes de 5 segundos
-                    unlockHandler?.removeCallbacks(unlockRunnable)
-                    // Restaura opacidade e tamanho
-                    view.alpha = 1.0f
-                    view.animate()
-                        .scaleX(1.0f)
-                        .scaleY(1.0f)
-                        .setDuration(200)
-                        .start()
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    // Se mover muito, cancela
-                    unlockHandler?.removeCallbacks(unlockRunnable)
-                    view.alpha = 1.0f
-                    view.animate()
-                        .scaleX(1.0f)
-                        .scaleY(1.0f)
-                        .setDuration(200)
-                        .start()
-                    true
-                }
-                else -> false
-            }
-        }
-        
-        // Atualiza visibilidade do círculo conforme o estado
-        updateUnlockCircleVisibility()
-    }
-    
-    /**
-     * Atualiza a visibilidade do círculo de desbloqueio
-     * Mostra apenas quando is_active ou kiosk_mode estão ativos
-     */
-    private fun updateUnlockCircleVisibility() {
-        runOnUiThread {
-            val unlockCircle = findViewById<View>(R.id.unlockCircle)
-            // Mostra o círculo apenas quando há algo bloqueado para desbloquear
-            if ((isActive == true && !preferenceManager.isGelaFitUnlocked()) || 
-                (kioskMode == true && !preferenceManager.isTargetAppUnlocked())) {
-                unlockCircle.visibility = View.VISIBLE
-            } else {
-                unlockCircle.visibility = View.GONE
-            }
-        }
-    }
     
 
     /**
@@ -318,7 +243,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                 runOnUiThread {
                     vibrateShort()
                     updateKioskButtonVisibility(false, kioskMode == true)
-                    updateUnlockCircleVisibility()
                     Toast.makeText(this@GelaFitWorkspaceActivity, "GelaFit Control desbloqueado - você pode minimizar", Toast.LENGTH_LONG).show()
                 }
                 
@@ -353,7 +277,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                 runOnUiThread {
                     vibrateShort()
                     updateKioskButtonVisibility(isActive == true, false)
-                    updateUnlockCircleVisibility()
                     Toast.makeText(this@GelaFitWorkspaceActivity, "App escolhido desbloqueado - você pode minimizar", Toast.LENGTH_LONG).show()
                 }
                 
@@ -395,7 +318,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                 runOnUiThread {
                     vibrateShort()
                     updateKioskButtonVisibility(false, false)
-                    updateUnlockCircleVisibility()
                     Toast.makeText(this@GelaFitWorkspaceActivity, "Tudo desbloqueado", Toast.LENGTH_LONG).show()
                 }
                 
@@ -682,7 +604,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                     
                     // Atualiza visibilidade dos botões e círculo
                     updateKioskButtonVisibility(currentIsActive == true, currentKioskMode == true)
-                    updateUnlockCircleVisibility()
                     
                     // Se mudou o status, aplica as mudanças
                     if (isActive != currentIsActive || kioskMode != currentKioskMode) {
@@ -1184,6 +1105,5 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         private const val CHECK_INTERVAL_MS = 5000L // Verifica a cada 5 segundos
         private const val ERROR_RETRY_DELAY_MS = 10000L // Em caso de erro, aguarda 10 segundos
         private const val STATUS_SYNC_INTERVAL_MS = 15 * 60 * 1000L // 15 minutos
-        private const val UNLOCK_HOLD_MS = 5000L // 5 segundos para desbloquear
     }
 }
