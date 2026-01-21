@@ -1,17 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#1E1E1E">
+
+    <!-- Header: Gelafit Kiosk -->
+    <LinearLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical"
+        android:background="#2C2C2C">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Gelafit Kiosk"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:gravity="center_vertical" />
+
+        <!-- Menu de 3 pontinhos -->
+        <ImageButton
+            android:id="@+id/menuButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_more"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Menu"
+            android:tint="#FFFFFF" />
+
+        <!-- Área oculta para desbloqueio (long press 5s no canto superior direito) -->
+        <View
+            android:id="@+id/unlockHotspot"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="Unlock Area"
+            android:background="@android:color/transparent" />
+
+    </LinearLayout>
+
+    <!-- Botão para ativar modo kiosk -->
+    <Button
+        android:id="@+id/activateKioskButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/headerLayout"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:text="Ativar Modo Kiosk"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#4CAF50"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <!-- Grid de apps selecionados (visível quando is_active está ativo) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/appsGridRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_below="@id/activateKioskButton"
+        android:layout_above="@id/footerLayout"
         android:padding="16dp"
         android:clipToPadding="false"
         android:visibility="visible" />
+
+    <!-- Footer: © MRIT -->
+    <LinearLayout
+        android:id="@+id/footerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center"
+        android:background="#2C2C2C">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="© MRIT"
+            android:textColor="#888888"
+            android:textSize="14sp" />
+
+    </LinearLayout>
 
     <!-- Container para o app escolhido (quando modo_kiosk está ativo) -->
     <!-- O app escolhido será aberto e exibido sobre esta Activity -->

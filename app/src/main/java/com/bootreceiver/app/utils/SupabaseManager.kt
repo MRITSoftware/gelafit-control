@@ -6,6 +6,7 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.realtime.Realtime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -23,6 +24,7 @@ class SupabaseManager {
         supabaseKey = SUPABASE_KEY
     ) {
         install(Postgrest)
+        install(Realtime)
     }
     
     /**
@@ -324,6 +326,25 @@ class SupabaseManager {
             }
             Log.e(TAG, "❌ Erro ao buscar status do dispositivo: ${e.message}", e)
             return@withContext null
+        }
+    }
+    
+    /**
+     * Atualiza is_active do dispositivo
+     */
+    suspend fun updateIsActive(deviceId: String, isActive: Boolean): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "📝 Atualizando is_active para dispositivo: $deviceId -> $isActive")
+            val updateData = mapOf("is_active" to isActive)
+            client.from("devices")
+                .update(updateData) {
+                    filter { eq("device_id", deviceId) }
+                }
+            Log.d(TAG, "✅ is_active atualizado com sucesso")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao atualizar is_active: ${e.message}", e)
+            false
         }
     }
     

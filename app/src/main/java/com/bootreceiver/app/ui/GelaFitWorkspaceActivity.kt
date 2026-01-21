@@ -1,16 +1,24 @@
 package com.bootreceiver.app.ui
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.MotionEvent
 import android.view.KeyEvent
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.PopupMenu
 import android.widget.TextView
+import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -43,8 +51,12 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     private var isActive: Boolean? = null
     private var kioskMode: Boolean? = null
     private var isMonitoring = false
+    private var unlockHandler: Handler? = null
     private lateinit var appsGridRecyclerView: RecyclerView
     private val selectedApps = mutableListOf<AppInfo>()
+    private val unlockRunnable = Runnable {
+        performEmergencyUnlock()
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,11 +94,213 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         // Carrega apps selecionados
         loadSelectedApps()
         
+        // Configura botão de ativar modo kiosk
+        setupKioskButton()
+        
+        // Configura menu de 3 pontinhos
+        setupMenuButton()
+
+        // Configura gesto de desbloqueio (canto superior direito, long press 5s)
+        setupUnlockHotspot()
+        
         // Mostra o grid por padrão (será ajustado conforme is_active)
         appsGridRecyclerView.visibility = View.VISIBLE
         
         // Inicia monitoramento de is_active e modo_kiosk (verifica status inicial também)
         startMonitoring()
+    }
+    
+    /**
+     * Configura o botão para ativar modo kiosk
+     */
+    private fun setupKioskButton() {
+        val activateKioskButton = findViewById<Button>(R.id.activateKioskButton)
+        activateKioskButton.setOnClickListener {
+            activateKioskMode()
+        }
+        
+        // Mostra o botão quando is_active está ativo mas kiosk_mode não está
+        serviceScope.launch {
+            val status = supabaseManager.getDeviceStatus(deviceId)
+            val isActive = status?.isActive ?: false
+            val kioskMode = status?.kioskMode ?: false
+            
+            runOnUiThread {
+                if (isActive && !kioskMode) {
+                    activateKioskButton.visibility = View.VISIBLE
+                } else {
+                    activateKioskButton.visibility = View.GONE
+                }
+            }
+        }
+    }
+    
+    /**
+     * Atualiza a visibilidade do botão de ativar modo kiosk
+     */
+    private fun updateKioskButtonVisibility(isActive: Boolean, kioskMode: Boolean) {
+        runOnUiThread {
+            val activateKioskButton = findViewById<Button>(R.id.activateKioskButton)
+            if (isActive && !kioskMode) {
+                activateKioskButton.visibility = View.VISIBLE
+            } else {
+                activateKioskButton.visibility = View.GONE
+            }
+        }
+    }
+
+    /**
+     * Configura a área de desbloqueio por long press (5s no canto superior direito)
+     */
+    private fun setupUnlockHotspot() {
+        val hotspot = findViewById<View>(R.id.unlockHotspot)
+        unlockHandler = Handler(Looper.getMainLooper())
+        hotspot.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    unlockHandler?.postDelayed(unlockRunnable, UNLOCK_HOLD_MS)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_MOVE -> {
+                    unlockHandler?.removeCallbacks(unlockRunnable)
+                }
+            }
+            true
+        }
+    }
+
+    /**
+     * Desativa kiosk_mode e is_active imediatamente (desbloqueio de emergência)
+     */
+    private fun performEmergencyUnlock() {
+        serviceScope.launch {
+            try {
+                // Atualiza Supabase
+                val kioskResult = supabaseManager.updateKioskMode(deviceId, false)
+                val activeResult = supabaseManager.updateIsActive(deviceId, false)
+
+                // Atualiza cache local
+                preferenceManager.saveKioskModeCached(false)
+                preferenceManager.saveIsActiveCached(false)
+                preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+
+                // Atualiza UI
+                runOnUiThread {
+                    updateKioskButtonVisibility(false, false)
+                    hideAppsGrid()
+                    AlertDialog.Builder(this@GelaFitWorkspaceActivity)
+                        .setTitle("Kiosk desativado")
+                        .setMessage("Modo kiosk e is_active desativados (desbloqueio de emergência).")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+
+                Log.d(TAG, "🔓 Desbloqueio de emergência executado (kiosk=false, is_active=false). Supabase ok? kiosk=$kioskResult, active=$activeResult")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao desbloquear: ${e.message}", e)
+                runOnUiThread {
+                    AlertDialog.Builder(this@GelaFitWorkspaceActivity)
+                        .setTitle("Erro")
+                        .setMessage("Falha ao desativar modo kiosk: ${e.message}")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
+        }
+    }
+    
+    /**
+     * Ativa o modo kiosk do app escolhido
+     */
+    private fun activateKioskMode() {
+        serviceScope.launch {
+            try {
+                // Ativa kiosk_mode no Supabase
+                val success = withContext(Dispatchers.IO) {
+                    supabaseManager.updateKioskMode(deviceId, true)
+                }
+                
+                if (success) {
+                    val targetPackage = preferenceManager.getTargetPackageName()
+                    if (!targetPackage.isNullOrEmpty()) {
+                        openConfiguredApp(targetPackage)
+                        runOnUiThread {
+                            AlertDialog.Builder(this@GelaFitWorkspaceActivity)
+                                .setTitle("Modo Kiosk Ativado")
+                                .setMessage("O modo kiosk foi ativado. O app ficará fixo na tela.")
+                                .setPositiveButton("OK", null)
+                                .show()
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        AlertDialog.Builder(this@GelaFitWorkspaceActivity)
+                            .setTitle("Erro")
+                            .setMessage("Não foi possível ativar o modo kiosk no servidor.")
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao ativar modo kiosk: ${e.message}", e)
+                runOnUiThread {
+                    AlertDialog.Builder(this@GelaFitWorkspaceActivity)
+                        .setTitle("Erro")
+                        .setMessage("Não foi possível ativar o modo kiosk: ${e.message}")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
+        }
+    }
+    
+    /**
+     * Configura o menu de 3 pontinhos
+     */
+    private fun setupMenuButton() {
+        val menuButton = findViewById<ImageButton>(R.id.menuButton)
+        menuButton.setOnClickListener {
+            showMenuPopup(it)
+        }
+    }
+    
+    /**
+     * Mostra o popup menu com opções
+     */
+    private fun showMenuPopup(view: View) {
+        val popup = PopupMenu(this, view)
+        popup.menuInflater.inflate(R.menu.workspace_menu, popup.menu)
+        
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.menu_check_settings -> {
+                    checkSettings()
+                    true
+                }
+                R.id.menu_add_product -> {
+                    addProductToGrid()
+                    true
+                }
+                else -> false
+            }
+        }
+        
+        popup.show()
+    }
+    
+    /**
+     * Verifica configurações necessárias
+     */
+    private fun checkSettings() {
+        val intent = Intent(this, SettingsCheckActivity::class.java)
+        startActivity(intent)
+    }
+    
+    /**
+     * Adiciona produto ao grid
+     */
+    private fun addProductToGrid() {
+        val intent = Intent(this, AddProductActivity::class.java)
+        startActivity(intent)
     }
     
     /**
@@ -171,15 +385,37 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         serviceScope.launch {
             // Verifica status inicial imediatamente
             try {
-                val initialIsActive = supabaseManager.getIsActive(deviceId)
-                val initialKioskMode = supabaseManager.getKioskMode(deviceId)
-                Log.d(TAG, "Status inicial - is_active: $initialIsActive, modo_kiosk: $initialKioskMode")
-                
-                isActive = initialIsActive
-                kioskMode = initialKioskMode
-                
-                // Aplica configurações iniciais
+                // Usa cache primeiro para resposta imediata
+                val cachedIsActive = preferenceManager.getIsActiveCached()
+                val cachedKioskMode = preferenceManager.getKioskModeCached()
+                isActive = cachedIsActive
+                kioskMode = cachedKioskMode
                 applyInitialSettings()
+
+                // Sincroniza com Supabase se último sync passou de 15 minutos
+                val now = System.currentTimeMillis()
+                val lastSync = preferenceManager.getStatusLastSync()
+                val needsSync = now - lastSync > STATUS_SYNC_INTERVAL_MS
+
+                if (needsSync) {
+                    val status = supabaseManager.getDeviceStatus(deviceId)
+                    val freshIsActive = status?.isActive
+                    val freshKiosk = status?.kioskMode
+                    Log.d(TAG, "Status inicial (sync) - is_active: $freshIsActive, modo_kiosk: $freshKiosk")
+
+                    if (freshIsActive != null) {
+                        isActive = freshIsActive
+                        preferenceManager.saveIsActiveCached(freshIsActive)
+                    }
+                    if (freshKiosk != null) {
+                        kioskMode = freshKiosk
+                        preferenceManager.saveKioskModeCached(freshKiosk)
+                    }
+                    preferenceManager.saveStatusLastSync(now)
+                    applyInitialSettings()
+                } else {
+                    Log.d(TAG, "Usando cache recente (menos de 15 min); último sync: ${lastSync}")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao verificar status inicial: ${e.message}", e)
             }
@@ -187,8 +423,25 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             // Loop de monitoramento contínuo
             while (isMonitoring) {
                 try {
-                    val currentIsActive = supabaseManager.getIsActive(deviceId)
-                    val currentKioskMode = supabaseManager.getKioskMode(deviceId)
+                    // Usa cache e sincroniza apenas se passar do intervalo
+                    val nowLoop = System.currentTimeMillis()
+                    val lastSyncLoop = preferenceManager.getStatusLastSync()
+                    var currentIsActive = preferenceManager.getIsActiveCached()
+                    var currentKioskMode = preferenceManager.getKioskModeCached()
+
+                    val shouldSync = nowLoop - lastSyncLoop > STATUS_SYNC_INTERVAL_MS
+                    if (shouldSync) {
+                        val status = supabaseManager.getDeviceStatus(deviceId)
+                        currentIsActive = status?.isActive ?: currentIsActive
+                        currentKioskMode = status?.kioskMode ?: currentKioskMode
+                        preferenceManager.saveIsActiveCached(currentIsActive)
+                        preferenceManager.saveKioskModeCached(currentKioskMode)
+                        preferenceManager.saveStatusLastSync(nowLoop)
+                        Log.d(TAG, "Sincronizado status com Supabase (loop)")
+                    }
+                    
+                    // Atualiza visibilidade do botão de kiosk
+                    updateKioskButtonVisibility(currentIsActive == true, currentKioskMode == true)
                     
                     // Se mudou o status, aplica as mudanças
                     if (isActive != currentIsActive || kioskMode != currentKioskMode) {
@@ -244,6 +497,9 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      * Aplica configurações iniciais baseadas no status atual
      */
     private fun applyInitialSettings() {
+        // Atualiza visibilidade do botão de kiosk
+        updateKioskButtonVisibility(isActive == true, kioskMode == true)
+        
         if (isActive == true) {
             applyAppBlocking()
             showAppsGrid() // Sempre mostra o grid quando is_active está ativo
@@ -596,5 +852,7 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         private const val TAG = "GelaFitWorkspace"
         private const val CHECK_INTERVAL_MS = 5000L // Verifica a cada 5 segundos
         private const val ERROR_RETRY_DELAY_MS = 10000L // Em caso de erro, aguarda 10 segundos
+        private const val STATUS_SYNC_INTERVAL_MS = 15 * 60 * 1000L // 15 minutos
+        private const val UNLOCK_HOLD_MS = 5000L // 5 segundos para desbloquear
     }
 }

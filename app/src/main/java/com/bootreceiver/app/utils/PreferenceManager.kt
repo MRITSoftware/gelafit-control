@@ -86,6 +86,31 @@ class PreferenceManager(context: Context) {
     fun getUnitName(): String? {
         return prefs.getString(KEY_UNIT_NAME, null)
     }
+
+    // Cache local de status (economiza requisições)
+    fun saveIsActiveCached(isActive: Boolean) {
+        prefs.edit().putBoolean(KEY_CACHED_IS_ACTIVE, isActive).apply()
+    }
+
+    fun getIsActiveCached(): Boolean {
+        return prefs.getBoolean(KEY_CACHED_IS_ACTIVE, false)
+    }
+
+    fun saveKioskModeCached(kioskMode: Boolean) {
+        prefs.edit().putBoolean(KEY_CACHED_KIOSK_MODE, kioskMode).apply()
+    }
+
+    fun getKioskModeCached(): Boolean {
+        return prefs.getBoolean(KEY_CACHED_KIOSK_MODE, false)
+    }
+
+    fun saveStatusLastSync(timestampMs: Long) {
+        prefs.edit().putLong(KEY_STATUS_LAST_SYNC, timestampMs).apply()
+    }
+
+    fun getStatusLastSync(): Long {
+        return prefs.getLong(KEY_STATUS_LAST_SYNC, 0L)
+    }
     
     companion object {
         private const val PREFS_NAME = "BootReceiverPrefs"
@@ -93,5 +118,8 @@ class PreferenceManager(context: Context) {
         private const val KEY_HAS_SEEN_DEVICE_ID_INFO = "has_seen_device_id_info"
         private const val KEY_DEVICE_REGISTERED = "device_registered"
         private const val KEY_UNIT_NAME = "unit_name"
+        private const val KEY_CACHED_IS_ACTIVE = "cached_is_active"
+        private const val KEY_CACHED_KIOSK_MODE = "cached_kiosk_mode"
+        private const val KEY_STATUS_LAST_SYNC = "status_last_sync"
     }
 }
