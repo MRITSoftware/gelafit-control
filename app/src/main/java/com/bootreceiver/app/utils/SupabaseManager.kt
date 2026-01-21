@@ -24,7 +24,7 @@ class SupabaseManager {
         supabaseKey = SUPABASE_KEY
     ) {
         install(Postgrest)
-        install(Realtime)
+        install(Realtime) { }
     }
     
     /**
