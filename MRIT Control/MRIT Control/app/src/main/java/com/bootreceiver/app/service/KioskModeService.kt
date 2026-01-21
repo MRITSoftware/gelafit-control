@@ -13,7 +13,6 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bootreceiver.app.R
 import com.bootreceiver.app.ui.AppSelectionActivity
-import com.bootreceiver.app.ui.GelaFitWorkspaceActivity
 import com.bootreceiver.app.utils.AppLauncher
 import com.bootreceiver.app.utils.DeviceIdManager
 import com.bootreceiver.app.utils.PreferenceManager
@@ -39,8 +38,6 @@ class KioskModeService : Service() {
     private val supabaseManager = SupabaseManager()
     private lateinit var deviceId: String
     private var lastKioskMode: Boolean? = null
-    private var lastIsActive: Boolean? = null
-    private var lastWorkspaceLaunchMs: Long = 0
     
     override fun onBind(intent: Intent?): IBinder? = null
     
@@ -130,54 +127,29 @@ class KioskModeService : Service() {
     private suspend fun startMonitoring() {
         while (isRunning) {
             try {
-                Log.d(TAG, "🔍 Verificando status de kiosk/is_active...")
-
-                val status = supabaseManager.getDeviceStatus(deviceId)
-                val isActive = status?.isActive ?: false
-                val kioskMode = status?.kioskMode ?: false
-
-                val changed = (lastIsActive != isActive) || (lastKioskMode != kioskMode)
-
-                if (changed) {
-                    Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                    Log.d(TAG, "is_active: $isActive | kiosk_mode: $kioskMode")
-                }
-
-                // Controle da casca (is_active)
-                if (isActive) {
-                    startAppBlocking()
-                    setOverlayEnabled(true)
-
-                    if (!kioskMode) {
-                        // Mostra a casca simples para o usuário escolher abrir o app
-                        maybeLaunchWorkspace()
-                    }
-                } else {
-                    stopAppBlocking()
-                    setOverlayEnabled(false)
-                }
-
-                // Controle do kiosk do app-alvo
+                Log.d(TAG, "🔍 Verificando modo kiosk...")
+                
+                val kioskMode = supabaseManager.getKioskMode(deviceId)
+                
+                // Se mudou o estado, aplica as mudanças
                 if (lastKioskMode != kioskMode) {
-                    if (kioskMode) {
-                        Log.d(TAG, "🔒 MODO KIOSK DO APP ATIVADO")
+                    Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    if (kioskMode == true) {
+                        Log.d(TAG, "🔒 MODO KIOSK ATIVADO!")
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                         applyKioskMode()
                     } else {
-                        Log.d(TAG, "🔓 MODO KIOSK DO APP DESATIVADO")
+                        Log.d(TAG, "🔓 MODO KIOSK DESATIVADO")
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                         removeKioskMode()
                     }
-                } else if (kioskMode) {
+                    lastKioskMode = kioskMode
+                } else if (kioskMode == true) {
                     // Se kiosk está ativo, verifica constantemente se o app está rodando
+                    // Verifica muito mais frequentemente para prevenir minimização
                     ensureAppIsRunning()
                 }
-
-                lastIsActive = isActive
-                lastKioskMode = kioskMode
-
-                if (changed) {
-                    Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                }
-
+                
                 delay(CHECK_INTERVAL_MS)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro no monitoramento: ${e.message}", e)
@@ -293,73 +265,6 @@ class KioskModeService : Service() {
             Log.d(TAG, "📡 Overlay de kiosk removido")
         } catch (e: Exception) {
             Log.w(TAG, "Erro ao remover overlay: ${e.message}")
-        }
-    }
-
-    /**
-     * Liga/desliga overlay transparente para bloquear gestos do sistema.
-     */
-    private fun setOverlayEnabled(enabled: Boolean) {
-        try {
-            val overlayIntent = Intent(this, com.bootreceiver.app.service.KioskOverlayService::class.java).apply {
-                putExtra("kiosk_enabled", enabled)
-            }
-            startService(overlayIntent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Não foi possível atualizar overlay: ${e.message}")
-        }
-    }
-
-    /**
-     * Inicia bloqueio de apps quando is_active = true.
-     */
-    private fun startAppBlocking() {
-        try {
-            val intent = Intent(this, com.bootreceiver.app.service.AppBlockingService::class.java).apply {
-                putExtra("is_active", true)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Erro ao iniciar bloqueio de apps: ${e.message}")
-        }
-    }
-
-    /**
-     * Para bloqueio de apps quando is_active = false.
-     */
-    private fun stopAppBlocking() {
-        try {
-            val intent = Intent(this, com.bootreceiver.app.service.AppBlockingService::class.java).apply {
-                putExtra("is_active", false)
-            }
-            startService(intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Erro ao parar bloqueio de apps: ${e.message}")
-        }
-    }
-
-    /**
-     * Lança a tela simples do control quando apenas is_active está ativo.
-     */
-    private fun maybeLaunchWorkspace() {
-        val now = System.currentTimeMillis()
-        // evita abrir a cada ciclo; no máximo a cada 3s
-        if (now - lastWorkspaceLaunchMs < 3000) return
-        lastWorkspaceLaunchMs = now
-
-        try {
-            val intent = Intent(this, GelaFitWorkspaceActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Não foi possível abrir a workspace: ${e.message}")
         }
     }
     

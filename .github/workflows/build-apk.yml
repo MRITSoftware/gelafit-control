@@ -27,52 +27,81 @@ jobs:
         packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
         accept-android-sdk-licenses: true
         
-    - name: Setup Gradle Wrapper
+    - name: Find project root directory
+      id: find_root
       run: |
-        # Verifica se gradlew existe
-        if [ ! -f "./gradlew" ]; then
-          echo "❌ gradlew não encontrado no repositório!"
-          exit 1
-        fi
-        
-        # Verifica se gradle-wrapper.jar existe, se não, baixa ou gera
-        if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-          echo "📥 gradle-wrapper.jar não encontrado. Tentando baixar..."
-          mkdir -p gradle/wrapper
-          
-          # Tenta baixar da URL do GitHub (versão específica 8.2)
-          curl -f -L -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar" || {
-            echo "⚠️ Falha na primeira URL, tentando URL alternativa..."
-            # Tenta URL alternativa do Gradle
-            curl -f -L -o gradle/wrapper/gradle-wrapper.jar "https://services.gradle.org/distributions/gradle-wrapper.jar" || {
-              echo "⚠️ Falha nas URLs, tentando gerar wrapper com Gradle instalado..."
-              # Última tentativa: usar Gradle instalado para gerar o wrapper
-              if command -v gradle &> /dev/null; then
-                GRADLE_VERSION=$(grep "distributionUrl" gradle/wrapper/gradle-wrapper.properties | sed -n 's/.*gradle-\([0-9.]*\)-.*/\1/p' || echo "8.2")
-                gradle wrapper --gradle-version "$GRADLE_VERSION" || {
-                  echo "❌ Erro: Não foi possível gerar gradle-wrapper.jar"
-                  exit 1
-                }
-              else
-                echo "❌ Erro: Não foi possível baixar ou gerar gradle-wrapper.jar"
-                exit 1
-              fi
-            }
-          }
-          
-          # Verifica se o arquivo foi criado e não está vazio
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ] || [ ! -s "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "❌ Erro: gradle-wrapper.jar está vazio ou não existe"
+        echo "📁 Procurando diretório raiz do projeto..."
+        pwd
+        echo ""
+        echo "📁 Listando diretórios..."
+        ls -la
+        echo ""
+        echo "📁 Procurando por gradlew..."
+        if [ -f "./gradlew" ]; then
+          echo "✅ gradlew encontrado na raiz"
+          echo "PROJECT_ROOT=." >> $GITHUB_OUTPUT
+        elif [ -d "MRIT Control/MRIT Control" ] && [ -f "MRIT Control/MRIT Control/gradlew" ]; then
+          echo "⚠️ gradlew encontrado em 'MRIT Control/MRIT Control'"
+          echo "PROJECT_ROOT=MRIT Control/MRIT Control" >> $GITHUB_OUTPUT
+        elif [ -d "MRIT Control" ] && [ -f "MRIT Control/gradlew" ]; then
+          echo "⚠️ gradlew encontrado em 'MRIT Control'"
+          echo "PROJECT_ROOT=MRIT Control" >> $GITHUB_OUTPUT
+        else
+          echo "❌ gradlew não encontrado! Buscando recursivamente..."
+          GRADLEW_PATH=$(find . -name "gradlew" -type f -not -path "./.git/*" -not -path "./.gradle/*" | head -1)
+          if [ -n "$GRADLEW_PATH" ]; then
+            GRADLEW_DIR=$(dirname "$GRADLEW_PATH" | sed 's|^\./||')
+            echo "✅ gradlew encontrado em: $GRADLEW_PATH"
+            echo "PROJECT_ROOT=$GRADLEW_DIR" >> $GITHUB_OUTPUT
+          else
+            echo "❌ gradlew não encontrado em nenhum lugar!"
+            find . -name "gradlew" -type f 2>/dev/null | head -5
             exit 1
           fi
-          
-          echo "✅ gradle-wrapper.jar configurado com sucesso"
-          ls -lh gradle/wrapper/gradle-wrapper.jar
-        else
-          echo "✅ gradle-wrapper.jar já existe"
-          ls -lh gradle/wrapper/gradle-wrapper.jar
         fi
         
+    - name: Verify project structure
+      working-directory: ${{ steps.find_root.outputs.PROJECT_ROOT }}
+      run: |
+        echo "📁 Verificando estrutura do projeto..."
+        echo "📁 Diretório atual: $(pwd)"
+        ls -la
+        echo ""
+        echo "📁 Verificando se gradlew existe..."
+        if [ -f "./gradlew" ]; then
+          echo "✅ gradlew encontrado"
+          ls -lh ./gradlew
+        else
+          echo "❌ gradlew não encontrado!"
+          exit 1
+        fi
+        echo ""
+        echo "📁 Verificando gradle wrapper..."
+        if [ -f "gradle/wrapper/gradle-wrapper.properties" ]; then
+          echo "✅ gradle-wrapper.properties encontrado"
+          cat gradle/wrapper/gradle-wrapper.properties
+        else
+          echo "❌ gradle-wrapper.properties não encontrado!"
+          exit 1
+        fi
+        if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          echo "✅ gradle-wrapper.jar encontrado"
+          ls -lh gradle/wrapper/gradle-wrapper.jar
+        else
+          echo "⚠️ gradle-wrapper.jar não encontrado. Baixando..."
+          mkdir -p gradle/wrapper
+          curl -f -L -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar" || {
+            echo "⚠️ Tentando URL alternativa..."
+            curl -f -L -o gradle/wrapper/gradle-wrapper.jar "https://services.gradle.org/distributions/gradle-wrapper.jar"
+          }
+          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "✅ gradle-wrapper.jar baixado com sucesso"
+            ls -lh gradle/wrapper/gradle-wrapper.jar
+          else
+            echo "❌ Erro ao baixar gradle-wrapper.jar"
+            exit 1
+          fi
+        fi
         chmod +x ./gradlew
         echo "✅ Gradle wrapper pronto para uso"
         
@@ -86,13 +115,36 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
       
+    - name: Build Debug APK
+      working-directory: ${{ steps.find_root.outputs.PROJECT_ROOT }}
+      run: ./gradlew assembleDebug --stacktrace --no-daemon --warning-mode all
+      env:
+        ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        
     - name: Build Release APK
+      working-directory: ${{ steps.find_root.outputs.PROJECT_ROOT }}
       run: ./gradlew assembleRelease --stacktrace --no-daemon --warning-mode all
       env:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
         ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
       
-    - name: Locate APK (signed or unsigned)
+    - name: Locate Debug APK
+      working-directory: ${{ steps.find_root.outputs.PROJECT_ROOT }}
+      run: |
+        APK_DEBUG="app/build/outputs/apk/debug/app-debug.apk"
+        
+        if [ -f "$APK_DEBUG" ]; then
+          echo "APK_DEBUG_PATH=${{ steps.find_root.outputs.PROJECT_ROOT }}/$APK_DEBUG" >> $GITHUB_ENV
+          ls -lh "$APK_DEBUG"
+          echo "✅ APK Debug localizado em: $APK_DEBUG"
+        else
+          echo "⚠️ APK Debug não encontrado!"
+          find app/build -name "*.apk" || echo "Nenhum APK encontrado"
+        fi
+        
+    - name: Locate Release APK (signed or unsigned)
+      working-directory: ${{ steps.find_root.outputs.PROJECT_ROOT }}
       run: |
         APK_SIGNED="app/build/outputs/apk/release/app-release.apk"
         APK_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -102,23 +154,35 @@ jobs:
         elif [ -f "$APK_UNSIGNED" ]; then
           APK_PATH="$APK_UNSIGNED"
         else
-          echo "APK não encontrado! Verificando estrutura de diretórios..."
+          echo "⚠️ APK Release não encontrado! Verificando estrutura de diretórios..."
           find app/build -name "*.apk" || echo "Nenhum APK encontrado"
           ls -la app/build/outputs/apk/ || echo "Diretório não existe"
-          exit 1
+          APK_PATH=""
         fi
         
-        echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
-        ls -lh "$APK_PATH"
-        echo "✅ APK localizado em: $APK_PATH"
+        if [ -n "$APK_PATH" ]; then
+          echo "APK_RELEASE_PATH=${{ steps.find_root.outputs.PROJECT_ROOT }}/$APK_PATH" >> $GITHUB_ENV
+          ls -lh "$APK_PATH"
+          echo "✅ APK Release localizado em: $APK_PATH"
+        fi
       
-    - name: Upload APK artifact
+    - name: Upload Debug APK artifact
       uses: actions/upload-artifact@v4
+      if: env.APK_DEBUG_PATH != ''
+      with:
+        name: app-debug-apk
+        path: ${{ env.APK_DEBUG_PATH }}
+        retention-days: 30
+        if-no-files-found: warn
+        
+    - name: Upload Release APK artifact
+      uses: actions/upload-artifact@v4
+      if: env.APK_RELEASE_PATH != ''
       with:
         name: app-release-apk
-        path: ${{ env.APK_PATH }}
+        path: ${{ env.APK_RELEASE_PATH }}
         retention-days: 30
-        if-no-files-found: error
+        if-no-files-found: warn
         
     - name: Generate build summary
       run: |

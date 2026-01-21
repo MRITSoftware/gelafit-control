@@ -261,17 +261,18 @@ class SupabaseManager {
             }
         }
     }
-
+    
     /**
-     * Verifica se is_active está ativo para o dispositivo (kiosk da casca)
-     *
+     * Verifica se o dispositivo está ativo (is_active) no Supabase
+     * Quando is_active = true, bloqueia acesso a outros apps
+     * 
      * @param deviceId ID único do dispositivo
      * @return true se is_active está ativo, false caso contrário, null se erro
      */
     suspend fun getIsActive(deviceId: String): Boolean? = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🔍 Verificando is_active para dispositivo: $deviceId")
-
+            
             val device = client.from("devices")
                 .select(columns = Columns.ALL) {
                     filter {
@@ -279,58 +280,27 @@ class SupabaseManager {
                     }
                 }
                 .decodeSingle<Device>()
-
-            val isActive = device.is_active
+            
+            val isActive = device.is_active ?: true
             Log.d(TAG, "ℹ️ is_active: $isActive")
             return@withContext isActive
         } catch (e: Exception) {
-            if (e.message?.contains("No rows") == true ||
+            if (e.message?.contains("No rows") == true || 
                 e.message?.contains("not found") == true ||
                 e.message?.contains("No value") == true) {
-                Log.d(TAG, "ℹ️ Dispositivo não encontrado. is_active: false (padrão)")
-                return@withContext false
+                Log.d(TAG, "ℹ️ Dispositivo não encontrado. is_active: true (padrão)")
+                return@withContext true
             } else {
                 Log.e(TAG, "❌ Erro ao verificar is_active: ${e.message}", e)
                 return@withContext null
             }
         }
     }
-
-    /**
-     * Busca status combinado (is_active + kiosk_mode) em uma chamada.
-     */
-    suspend fun getDeviceStatus(deviceId: String): DeviceStatus? = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "🔍 Buscando status do dispositivo: $deviceId")
-
-            val device = client.from("devices")
-                .select(columns = Columns.ALL) {
-                    filter { eq("device_id", deviceId) }
-                }
-                .decodeSingle<Device>()
-
-            val status = DeviceStatus(
-                isActive = device.is_active,
-                kioskMode = device.kiosk_mode ?: false
-            )
-            Log.d(TAG, "ℹ️ Status -> is_active=${status.isActive}, kiosk_mode=${status.kioskMode}")
-            return@withContext status
-        } catch (e: Exception) {
-            if (e.message?.contains("No rows") == true ||
-                e.message?.contains("not found") == true ||
-                e.message?.contains("No value") == true) {
-                Log.d(TAG, "ℹ️ Dispositivo não encontrado. Status padrão (false/false)")
-                return@withContext DeviceStatus(isActive = false, kioskMode = false)
-            }
-            Log.e(TAG, "❌ Erro ao buscar status do dispositivo: ${e.message}", e)
-            return@withContext null
-        }
-    }
     
     /**
      * Registra ou atualiza um dispositivo na tabela devices
      * 
-     * @param deviceId ID único do dispositivo (Android ID)
+     * @param deviceId ID único do dispositivo
      * @param unitName Nome da unidade (email ou nome personalizado)
      * @return true se o registro foi bem-sucedido
      */
@@ -458,16 +428,10 @@ data class Device(
     val unit_name: String? = null,
     val registered_at: String? = null,
     val last_seen: String? = null,
-    val is_active: Boolean = true,
+    val is_active: Boolean? = true,  // Se true, bloqueia acesso a outros apps
     val kiosk_mode: Boolean? = false,  // Modo kiosk (bloqueia minimização)
     val created_at: String? = null,
     val updated_at: String? = null
-)
-
-@Serializable
-data class DeviceStatus(
-    val isActive: Boolean = false,
-    val kioskMode: Boolean = false
 )
 
 /**
@@ -483,4 +447,3 @@ data class DeviceCommand(
     val created_at: String? = null,  // TIMESTAMP WITH TIME ZONE
     val executed_at: String? = null  // TIMESTAMP WITH TIME ZONE
 )
-

@@ -56,14 +56,12 @@ class AppSelectionActivity : AppCompatActivity() {
             return
         }
         
-        // Se já estiver configurado, fecha esta activity e abre o app configurado
+        // Se já estiver configurado, abre a área de trabalho do GelaFit Control
         if (preferenceManager.isConfigured()) {
-            Log.d(TAG, "App já configurado. Abrindo app configurado...")
-            val targetPackage = preferenceManager.getTargetPackageName()
-            if (targetPackage != null) {
-                val appLauncher = com.bootreceiver.app.utils.AppLauncher(this)
-                appLauncher.launchApp(targetPackage)
-            }
+            Log.d(TAG, "App já configurado. Abrindo área de trabalho...")
+            val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            startActivity(intent)
             finish()
             return
         }
@@ -333,7 +331,7 @@ class AppSelectionActivity : AppCompatActivity() {
     }
     
     /**
-     * Salva o app selecionado e fecha a activity
+     * Salva o app selecionado e abre a área de trabalho do GelaFit Control
      */
     private fun selectApp(packageName: String, appName: String) {
         Log.d(TAG, "App selecionado: $appName ($packageName)")
@@ -343,14 +341,17 @@ class AppSelectionActivity : AppCompatActivity() {
         
         Toast.makeText(
             this,
-            "App configurado: $appName\nO app será aberto automaticamente no próximo boot.",
-            Toast.LENGTH_LONG
+            "App configurado: $appName\nAbrindo área de trabalho...",
+            Toast.LENGTH_SHORT
         ).show()
         
-        // Aguarda um pouco e fecha a activity
+        // Aguarda um pouco e abre a área de trabalho
         listView.postDelayed({
+            val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            startActivity(intent)
             finish()
-        }, 2000)
+        }, 1000)
     }
     
     /**

@@ -1,18 +1,20 @@
-# Boot Receiver - Aplicativo Android para Digital Signage
+# GelaFit Control - Sistema de Controle e Monitoramento de Apps
 
 ## 📱 Descrição
 
-Aplicativo Android desenvolvido em Kotlin para **Android Sticks/TV Box** usado em **Digital Signage**. O app inicia automaticamente um aplicativo específico após o boot do dispositivo, verificando primeiro se há conexão com internet.
+Aplicativo Android desenvolvido em Kotlin para **Android Sticks/TV Box** usado em **Digital Signage**. O GelaFit Control permite escolher qual aplicativo será aberto automaticamente e garante que ele sempre esteja funcionando, mesmo quando fechado. O sistema roda sempre em background e pode reiniciar o app escolhido remotamente via comandos do Supabase.
 
 ## 🎯 Funcionalidades
 
 - ✅ **Inicialização automática no boot**: Escuta o evento `BOOT_COMPLETED` e inicia o processo
-- ✅ **Seleção de app na primeira vez**: Tela para escolher qual app será aberto automaticamente
+- ✅ **Seleção de app**: Escolha qual aplicativo será monitorado e controlado
+- ✅ **Monitoramento contínuo**: Detecta quando o app escolhido abre/fecha automaticamente
+- ✅ **Sempre em background**: GelaFit Control roda sempre em background, mesmo quando fechado
+- ✅ **Início automático**: Quando o app escolhido abre, o GelaFit Control garante que está rodando
+- ✅ **Reiniciar app remotamente**: Monitora comandos no Supabase e reinicia o app configurado
+- ✅ **Modo Kiosk**: Previne que o app escolhido seja fechado ou minimizado (quando ativado)
 - ✅ **Verificação de internet**: Aguarda conexão antes de abrir o app
 - ✅ **Retry automático**: Tenta novamente se não houver internet (até 60 tentativas)
-- ✅ **Reiniciar app remotamente**: Monitora comandos no Supabase e reinicia o app configurado
-- ✅ **Reiniciar app manualmente**: Botão na tela de Status para reiniciar o app
-- ✅ **Sem interface visual**: Roda em segundo plano após configuração
 - ✅ **Logs detalhados**: Facilita debug via Logcat
 - ✅ **Compatível com Android TV/Stick**: Otimizado para dispositivos sem interação do usuário
 
@@ -26,7 +28,10 @@ app/
 │   │   ├── receiver/
 │   │   │   └── BootReceiver.kt             # BroadcastReceiver para BOOT_COMPLETED
 │   │   ├── service/
-│   │   │   └── BootService.kt               # Serviço que verifica internet e abre app
+│   │   │   ├── BootService.kt               # Serviço que verifica internet e abre app
+│   │   │   ├── AppMonitorService.kt         # Monitora quando app escolhido abre/fecha
+│   │   │   ├── AppRestartMonitorService.kt  # Monitora comandos de reiniciar app
+│   │   │   └── KioskModeService.kt          # Gerencia modo kiosk
 │   │   ├── ui/
 │   │   │   └── AppSelectionActivity.kt     # Tela de seleção de app (primeira vez)
 │   │   └── utils/

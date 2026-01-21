@@ -5,7 +5,7 @@ Este documento explica como fazer push do código para o GitHub e como o workflo
 ## 📋 Pré-requisitos
 
 1. **Git instalado** no seu computador
-2. **Conta GitHub** com acesso ao repositório: https://github.com/MRITSoftware/mrit-control
+2. **Conta GitHub** com acesso ao repositório: https://github.com/MRITSoftware/kiosk-gelafit
 3. **Personal Access Token** (se necessário para autenticação)
 
 ## 🎯 Opção 1: Usar o Script Automático (Recomendado)
@@ -39,7 +39,7 @@ git init
 ### 2. Configurar Remote
 
 ```powershell
-git remote add origin https://github.com/MRITSoftware/mrit-control.git
+git remote add origin https://github.com/MRITSoftware/kiosk-gelafit.git
 ```
 
 ### 3. Adicionar Arquivos
@@ -78,7 +78,7 @@ Se pedir autenticação, você tem duas opções:
 1. Configure SSH no GitHub
 2. Mude o remote:
    ```powershell
-   git remote set-url origin git@github.com:MRITSoftware/mrit-control.git
+   git remote set-url origin git@github.com:MRITSoftware/kiosk-gelafit.git
    ```
 3. Faça push novamente
 
@@ -105,7 +105,7 @@ O workflow está configurado em `.github/workflows/build.yml` e faz o seguinte:
 
 ### Como acessar os APKs
 
-1. Vá para: https://github.com/MRITSoftware/mrit-control/actions
+1. Vá para: https://github.com/MRITSoftware/kiosk-gelafit/actions
 2. Clique no workflow que você quer (mais recente)
 3. Role até o final da página
 4. Na seção **Artifacts**, você verá:
@@ -115,7 +115,7 @@ O workflow está configurado em `.github/workflows/build.yml` e faz o seguinte:
 
 ### Executar Workflow Manualmente
 
-1. Vá para: https://github.com/MRITSoftware/mrit-control/actions
+1. Vá para: https://github.com/MRITSoftware/kiosk-gelafit/actions
 2. Clique em **Build APK** no menu lateral
 3. Clique em **Run workflow**
 4. Selecione:
@@ -150,7 +150,7 @@ on:
 
 Após o push:
 
-1. ✅ Acesse: https://github.com/MRITSoftware/mrit-control
+1. ✅ Acesse: https://github.com/MRITSoftware/kiosk-gelafit
 2. ✅ Você deve ver todos os arquivos do projeto
 3. ✅ Vá em **Actions** para ver o workflow em execução
 4. ✅ Aguarde alguns minutos para o build completar
@@ -160,7 +160,7 @@ Após o push:
 
 ### Erro: "Repository not found"
 - Verifique se você tem **permissão de escrita** no repositório
-- Confirme que o repositório existe: https://github.com/MRITSoftware/mrit-control
+- Confirme que o repositório existe: https://github.com/MRITSoftware/kiosk-gelafit
 
 ### Erro: "Authentication failed"
 - Use um **Personal Access Token** em vez de senha
@@ -192,8 +192,8 @@ Após o push bem-sucedido:
 
 ## 🔗 Links Úteis
 
-- Repositório: https://github.com/MRITSoftware/mrit-control
-- Actions: https://github.com/MRITSoftware/mrit-control/actions
+- Repositório: https://github.com/MRITSoftware/kiosk-gelafit
+- Actions: https://github.com/MRITSoftware/kiosk-gelafit/actions
 - Criar Token: https://github.com/settings/tokens
 - Documentação GitHub Actions: https://docs.github.com/en/actions
 

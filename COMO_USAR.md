@@ -5,7 +5,7 @@
 ### Passo 1: Instalar o App
 
 1. Baixe o APK mais recente do GitHub Actions:
-   - Acesse: https://github.com/MRITSoftware/mrit-control/actions
+   - Acesse: https://github.com/MRITSoftware/kiosk-gelafit/actions
    - Baixe o APK da última build bem-sucedida
 
 2. Instale no dispositivo Android:

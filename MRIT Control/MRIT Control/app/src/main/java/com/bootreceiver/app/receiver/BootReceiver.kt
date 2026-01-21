@@ -61,13 +61,27 @@ class BootReceiver : BroadcastReceiver() {
                     }
                 } else {
                     Log.d(TAG, "App alvo configurado: $targetPackageName")
-                    // Inicia o serviço que verifica internet e abre o app
-                    val serviceIntent = Intent(context, BootService::class.java)
+                    // Abre a área de trabalho do GelaFit Control (que por sua vez abre o app configurado)
+                    val workspaceIntent = Intent(context, 
+                        com.bootreceiver.app.ui.GelaFitWorkspaceActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+                    }
                     try {
-                        context.startService(serviceIntent)
-                        Log.d(TAG, "BootService iniciado")
+                        context.startActivity(workspaceIntent)
+                        Log.d(TAG, "Área de trabalho iniciada")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Erro ao iniciar BootService: ${e.message}", e)
+                        Log.e(TAG, "Erro ao abrir área de trabalho: ${e.message}", e)
+                        // Fallback: inicia o serviço que verifica internet e abre o app diretamente
+                        val serviceIntent = Intent(context, BootService::class.java)
+                        try {
+                            context.startService(serviceIntent)
+                            Log.d(TAG, "BootService iniciado (fallback)")
+                        } catch (e2: Exception) {
+                            Log.e(TAG, "Erro ao iniciar BootService: ${e2.message}", e2)
+                        }
                     }
                 }
                 

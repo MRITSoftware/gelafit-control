@@ -34,12 +34,12 @@ git init
 ### 3. Configurar Remote do GitHub
 
 ```powershell
-git remote add origin https://github.com/MRITSoftware/mrit-control.git
+git remote add origin https://github.com/MRITSoftware/kiosk-gelafit.git
 ```
 
 Se já existir, atualize:
 ```powershell
-git remote set-url origin https://github.com/MRITSoftware/mrit-control.git
+git remote set-url origin https://github.com/MRITSoftware/kiosk-gelafit.git
 ```
 
 ### 4. Adicionar Todos os Arquivos
@@ -89,7 +89,7 @@ git push -u origin main
 
 Após o push:
 
-1. Acesse: https://github.com/MRITSoftware/mrit-control
+1. Acesse: https://github.com/MRITSoftware/kiosk-gelafit
 2. Você deve ver todos os arquivos do projeto
 3. Vá em **Actions** para ver o workflow gerando os APKs
 
@@ -97,7 +97,7 @@ Após o push:
 
 ### Erro: "Repository not found"
 - Verifique se você tem **permissão de escrita** no repositório
-- Confirme que o repositório existe: https://github.com/MRITSoftware/mrit-control
+- Confirme que o repositório existe: https://github.com/MRITSoftware/kiosk-gelafit
 
 ### Erro: "Authentication failed"
 - Use um **Personal Access Token** em vez de senha
@@ -120,7 +120,7 @@ cd "d:\VISION\Atualizações\Control\MRIT Control"
 
 # Inicializar e configurar
 git init
-git remote add origin https://github.com/MRITSoftware/mrit-control.git
+git remote add origin https://github.com/MRITSoftware/kiosk-gelafit.git
 git add .
 git commit -m "feat: Adiciona funcionalidade de reiniciar dispositivo via Supabase"
 git branch -M main
