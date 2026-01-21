@@ -147,32 +147,79 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             activateKioskMode()
         }
         
-        // Mostra o botão quando is_active está ativo mas kiosk_mode não está
-        serviceScope.launch {
-            val status = supabaseManager.getDeviceStatus(deviceId)
-            val isActive = status?.isActive ?: false
-            val kioskMode = status?.kioskMode ?: false
+        // Configura botão de bloquear área de trabalho
+        val blockWorkspaceButton = findViewById<Button>(R.id.blockWorkspaceButton)
+        blockWorkspaceButton.setOnClickListener {
+            blockWorkspace()
+        }
+    }
+    
+    /**
+     * Atualiza a visibilidade dos botões (ativar modo kiosk e bloquear área de trabalho)
+     */
+    private fun updateKioskButtonVisibility(isActive: Boolean, kioskMode: Boolean) {
+        runOnUiThread {
+            val activateKioskButton = findViewById<Button>(R.id.activateKioskButton)
+            val blockWorkspaceButton = findViewById<Button>(R.id.blockWorkspaceButton)
             
-            runOnUiThread {
-                if (isActive && !kioskMode) {
-                    activateKioskButton.visibility = View.VISIBLE
-                } else {
-                    activateKioskButton.visibility = View.GONE
-                }
+            // Botão "Ativar Modo Kiosk" aparece quando is_active=true e kiosk_mode=false
+            if (isActive && !kioskMode) {
+                activateKioskButton.visibility = View.VISIBLE
+            } else {
+                activateKioskButton.visibility = View.GONE
+            }
+            
+            // Botão "Bloquear Área de Trabalho" aparece quando is_active=false
+            if (!isActive) {
+                blockWorkspaceButton.visibility = View.VISIBLE
+            } else {
+                blockWorkspaceButton.visibility = View.GONE
             }
         }
     }
     
     /**
-     * Atualiza a visibilidade do botão de ativar modo kiosk
+     * Bloqueia a área de trabalho (seta is_active = true)
      */
-    private fun updateKioskButtonVisibility(isActive: Boolean, kioskMode: Boolean) {
-        runOnUiThread {
-            val activateKioskButton = findViewById<Button>(R.id.activateKioskButton)
-            if (isActive && !kioskMode) {
-                activateKioskButton.visibility = View.VISIBLE
-            } else {
-                activateKioskButton.visibility = View.GONE
+    private fun blockWorkspace() {
+        serviceScope.launch {
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    supabaseManager.updateIsActive(deviceId, true)
+                }
+                
+                if (success) {
+                    // Atualiza cache local
+                    preferenceManager.saveIsActiveCached(true)
+                    preferenceManager.saveGelaFitUnlocked(false) // Reseta desbloqueio
+                    preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                    
+                    // Atualiza variáveis locais
+                    isActive = true
+                    
+                    // Aplica modo kiosk do GelaFit Control
+                    enableGelaFitKioskMode()
+                    applyAppBlocking()
+                    showAppsGrid()
+                    
+                    // Atualiza UI
+                    runOnUiThread {
+                        vibrateShort()
+                        updateKioskButtonVisibility(true, kioskMode == true)
+                        Toast.makeText(this@GelaFitWorkspaceActivity, "Área de trabalho bloqueada", Toast.LENGTH_LONG).show()
+                    }
+                    
+                    Log.d(TAG, "✅ Área de trabalho bloqueada (is_active=true)")
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@GelaFitWorkspaceActivity, "Erro ao bloquear área de trabalho", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao bloquear área de trabalho: ${e.message}", e)
+                runOnUiThread {
+                    Toast.makeText(this@GelaFitWorkspaceActivity, "Erro: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

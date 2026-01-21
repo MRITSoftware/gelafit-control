@@ -57,6 +57,25 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- Botão para bloquear área de trabalho (quando is_active = false) -->
+    <Button
+        android:id="@+id/blockWorkspaceButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/headerLayout"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:text="Bloquear Área de Trabalho"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#FF5722"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
 
     <!-- Grid de apps selecionados (visível quando is_active está ativo) -->
     <androidx.recyclerview.widget.RecyclerView
