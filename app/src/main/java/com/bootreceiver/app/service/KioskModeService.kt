@@ -469,26 +469,37 @@ class KioskModeService : Service() {
                         consecutiveFailures++
                         Log.d(TAG, "🚨 GELAFIT WORKSPACE FECHADO! REABRINDO IMEDIATAMENTE... (tentativa $consecutiveFailures)")
                         
-                        // Tenta abrir a workspace múltiplas vezes rapidamente
+                        // Tenta abrir a workspace com flags que garantem recriação completa
                         try {
+                            // Aguarda um pouco antes de reabrir para garantir que a activity anterior foi completamente destruída
+                            delay(800)
+                            
                             val intent = Intent(this@KioskModeService, GelaFitWorkspaceActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                        Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                                // Adiciona flag para garantir que a activity seja recriada completamente
+                                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
                             }
-                            startActivity(intent)
-                            delay(300) // Aguarda 300ms
                             
-                            // Se ainda não está rodando, tenta novamente
+                            startActivity(intent)
+                            
+                            // Aguarda tempo suficiente para a activity inicializar completamente (onCreate + onResume)
+                            delay(1500)
+                            
+                            // Se ainda não está rodando, tenta novamente com mais delay
                             if (!isWorkspaceRunning()) {
                                 Log.d(TAG, "⚠️ Tentativa 2: Reabrindo workspace...")
+                                delay(800)
                                 startActivity(intent)
-                                delay(500)
+                                delay(1500)
                             }
                             
                             // Se ainda não está rodando, tenta mais uma vez
                             if (!isWorkspaceRunning()) {
                                 Log.d(TAG, "⚠️ Tentativa 3: Reabrindo workspace...")
+                                delay(800)
                                 startActivity(intent)
                             }
                         } catch (e: Exception) {

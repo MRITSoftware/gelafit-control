@@ -84,6 +84,12 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         deviceId = DeviceIdManager.getDeviceId(this)
         preferenceManager = PreferenceManager(this)
         
+        // Garante que o layout seja renderizado corretamente (evita tela preta)
+        window.decorView.post {
+            window.decorView.invalidate()
+            window.decorView.requestLayout()
+        }
+        
         // Configura a Activity para ocupar toda a tela
         setupFullScreen()
         
@@ -997,6 +1003,15 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume - Garantindo que tela do control está visível")
+        
+        // Garante que a tela está visível e o layout foi renderizado
+        runOnUiThread {
+            // Força a atualização da UI para evitar tela preta
+            window.decorView.post {
+                window.decorView.invalidate()
+                window.decorView.requestLayout()
+            }
+        }
         
         // Recarrega apps quando volta para a tela (caso tenha sido adicionado enquanto estava em outra tela)
         loadSelectedApps()
