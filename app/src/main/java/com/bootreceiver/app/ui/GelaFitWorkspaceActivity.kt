@@ -79,19 +79,33 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Configura a Activity para ocupar toda a tela ANTES de setContentView
+        setupFullScreen()
+        
         setContentView(R.layout.activity_gelafit_workspace)
         
         deviceId = DeviceIdManager.getDeviceId(this)
         preferenceManager = PreferenceManager(this)
         
         // Garante que o layout seja renderizado corretamente (evita tela preta)
+        // Múltiplas tentativas para garantir renderização completa
         window.decorView.post {
             window.decorView.invalidate()
             window.decorView.requestLayout()
+            
+            // Força novamente após um pequeno delay
+            window.decorView.postDelayed({
+                window.decorView.invalidate()
+                window.decorView.requestLayout()
+            }, 50)
+            
+            // Força mais uma vez após delay maior
+            window.decorView.postDelayed({
+                window.decorView.invalidate()
+                window.decorView.requestLayout()
+            }, 200)
         }
-        
-        // Configura a Activity para ocupar toda a tela
-        setupFullScreen()
         
         // Inicializa RecyclerView do grid
         appsGridRecyclerView = findViewById(R.id.appsGridRecyclerView)
@@ -1005,12 +1019,28 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         Log.d(TAG, "onResume - Garantindo que tela do control está visível")
         
         // Garante que a tela está visível e o layout foi renderizado
+        // Usa múltiplas tentativas para garantir renderização
         runOnUiThread {
-            // Força a atualização da UI para evitar tela preta
-            window.decorView.post {
+            // Força a atualização da UI imediatamente
+            window.decorView.invalidate()
+            window.decorView.requestLayout()
+            
+            // Força novamente após um pequeno delay para garantir renderização
+            window.decorView.postDelayed({
                 window.decorView.invalidate()
                 window.decorView.requestLayout()
-            }
+                
+                // Garante que o conteúdo está visível
+                if (appsGridRecyclerView.visibility != View.VISIBLE && isActive == true) {
+                    appsGridRecyclerView.visibility = View.VISIBLE
+                }
+            }, 100)
+            
+            // Força mais uma vez após delay maior
+            window.decorView.postDelayed({
+                window.decorView.invalidate()
+                window.decorView.requestLayout()
+            }, 300)
         }
         
         // Recarrega apps quando volta para a tela (caso tenha sido adicionado enquanto estava em outra tela)
