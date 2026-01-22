@@ -59,7 +59,8 @@ class SupabaseManager {
             if (e.message?.contains("No rows") == true || 
                 e.message?.contains("not found") == true ||
                 e.message?.contains("No value") == true) {
-                Log.d(TAG, "ℹ️ Nenhum comando de reiniciar app pendente")
+                // Log apenas a cada 10 verificações para não poluir o log
+                // Log.d(TAG, "ℹ️ Nenhum comando de reiniciar app pendente para device: $deviceId")
                 null
             } else {
                 Log.e(TAG, "❌ Erro ao verificar comando: ${e.message}", e)
@@ -571,21 +572,52 @@ class SupabaseManager {
     fun subscribeToRestartCommands(deviceId: String): kotlinx.coroutines.flow.Flow<DeviceCommand> {
         return flow {
             var lastCommandId: String? = null
+            var lastExecutedState: Boolean? = null
+            var checkCount = 0
             
             while (true) {
                 try {
+                    checkCount++
                     val command = withContext(Dispatchers.IO) {
                         getRestartAppCommand(deviceId)
                     }
                     
-                    // Só emite se há comando novo (não processado ainda)
-                    if (command != null && command.id != null && command.id != lastCommandId) {
-                        Log.d(TAG, "🔄 Comando de reiniciar detectado: ${command.id}")
-                        emit(command)
-                        lastCommandId = command.id
+                    // Log a cada 30 verificações (30 segundos) para confirmar que está verificando
+                    if (checkCount % 30 == 0) {
+                        Log.d(TAG, "🔍 Verificando comandos... (device: $deviceId, verificação #$checkCount)")
                     }
                     
-                    delay(5000) // Verifica a cada 5 segundos (reduz requisições de 60/min para 12/min)
+                    // Emite se há comando pendente (não executado) e:
+                    // 1. É um comando novo (ID diferente), OU
+                    // 2. É o mesmo comando mas ainda não foi executado (executed mudou de true para false)
+                    if (command != null && command.id != null) {
+                        val isNewCommand = command.id != lastCommandId
+                        val wasExecuted = lastExecutedState == true
+                        val isNowPending = !command.executed
+                        
+                        if (isNewCommand || (wasExecuted && isNowPending)) {
+                            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            Log.d(TAG, "🔄 COMANDO DE REINICIAR APP DETECTADO!")
+                            Log.d(TAG, "📋 ID: ${command.id}")
+                            Log.d(TAG, "📱 Device: $deviceId")
+                            Log.d(TAG, "🆕 Novo comando: $isNewCommand")
+                            Log.d(TAG, "✅ Executado antes: $wasExecuted")
+                            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            emit(command)
+                            lastCommandId = command.id
+                            lastExecutedState = command.executed
+                        } else if (command.executed) {
+                            // Se o comando foi executado, atualiza o estado mas não emite
+                            lastCommandId = command.id
+                            lastExecutedState = true
+                        }
+                    } else {
+                        // Se não há comando, reseta o estado
+                        lastCommandId = null
+                        lastExecutedState = null
+                    }
+                    
+                    delay(1000) // Verifica a cada 1 segundo para resposta rápida
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ Erro ao verificar comandos: ${e.message}", e)
                     delay(10000) // Em caso de erro, aguarda mais tempo

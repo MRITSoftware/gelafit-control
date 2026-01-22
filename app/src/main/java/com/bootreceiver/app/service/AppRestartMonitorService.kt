@@ -64,7 +64,10 @@ class AppRestartMonitorService : Service() {
         
         try {
             isRunning = true
-            Log.d(TAG, "AppRestartMonitorService iniciado para dispositivo: $deviceId")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "🔄 AppRestartMonitorService iniciado")
+            Log.d(TAG, "📱 Device ID: $deviceId")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             
             // Garante que o canal de notificação existe
             createNotificationChannel()
