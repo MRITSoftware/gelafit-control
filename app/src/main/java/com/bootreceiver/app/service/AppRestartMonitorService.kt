@@ -149,13 +149,24 @@ class AppRestartMonitorService : Service() {
      * Usa polling otimizado (1 segundo) para detectar comandos rapidamente
      */
     private fun startMonitoring() {
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         Log.d(TAG, "🔄 Iniciando monitoramento REALTIME de comandos (1 segundo)")
+        Log.d(TAG, "📱 Device ID: $deviceId")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         
         monitoringJob = serviceScope.launch {
             try {
                 supabaseManager.subscribeToRestartCommands(deviceId)
                     .onEach { command ->
                         // Recebe comandos em tempo real
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        Log.d(TAG, "📨 COMANDO RECEBIDO NO FLOW!")
+                        Log.d(TAG, "📋 ID: ${command.id}")
+                        Log.d(TAG, "📱 Device: ${command.device_id}")
+                        Log.d(TAG, "🔄 Command: ${command.command}")
+                        Log.d(TAG, "✅ Executed: ${command.executed}")
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        
                         if (!isRestarting) {
                             Log.d(TAG, "🔄 REALTIME: Comando de reiniciar detectado: ${command.id}")
                             processRestartCommand(command)

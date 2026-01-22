@@ -27,6 +27,10 @@ import android.widget.Toast
 import android.widget.RelativeLayout
 import android.os.Handler
 import android.os.Looper
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -68,6 +72,14 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     private var isOpeningAllowedActivity = false // Flag para permitir abrir activities permitidas
     private lateinit var appsGridRecyclerView: RecyclerView
     private val selectedApps = mutableListOf<AppInfo>()
+    
+    // Monitoramento de conectividade
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var lastInternetTime: Long = System.currentTimeMillis()
+    private var isInternetAvailable = true
+    private var networkMonitoringJob: Job? = null
+    private var wasUnlockedDueToNoInternet = false // Flag para saber se desbloqueou por falta de internet
     private val appAddedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val packageName = intent?.getStringExtra("package_name")
@@ -146,6 +158,9 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         
         // Inicia monitoramento de is_active e modo_kiosk (verifica status inicial também)
         startMonitoring()
+        
+        // Inicia monitoramento de conectividade
+        startNetworkMonitoring()
         
         // Registra receiver para atualizar grid quando app for adicionado
         // Para Android 13+ (API 33+), é necessário especificar RECEIVER_NOT_EXPORTED
@@ -699,6 +714,13 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             try {
                 while (isMonitoring) {
                     try {
+                        // Se está sem internet e foi desbloqueado por falta de internet, não tenta atualizar do Supabase
+                        if (!isInternetAvailable && wasUnlockedDueToNoInternet) {
+                            Log.d(TAG, "⏸️ Sem internet - pulando atualização do Supabase (desbloqueado por falta de internet)")
+                            delay(POLLING_INTERVAL_MS)
+                            continue
+                        }
+                        
                         val status = withContext(Dispatchers.IO) {
                             supabaseManager.getDeviceStatus(deviceId)
                         }
@@ -712,6 +734,11 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                         preferenceManager.saveIsActiveCached(currentIsActive)
                         preferenceManager.saveKioskModeCached(currentKioskMode)
                         preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                        
+                        // Se voltou internet e estava desbloqueado por falta de internet, reseta flag
+                        if (isInternetAvailable && wasUnlockedDueToNoInternet) {
+                            wasUnlockedDueToNoInternet = false
+                        }
                         
                         // Atualiza variáveis locais e visibilidade dos botões
                         val statusChanged = (isActive != currentIsActive) || (kioskMode != currentKioskMode)
@@ -1102,11 +1129,190 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Verifica se há internet disponível
+     */
+    private fun checkInternetAvailability(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+               capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+    
+    /**
+     * Inicia monitoramento de conectividade de rede
+     * Desbloqueia automaticamente após 5 minutos sem internet
+     */
+    private fun startNetworkMonitoring() {
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        
+        // Verifica estado inicial
+        isInternetAvailable = checkInternetAvailability()
+        lastInternetTime = System.currentTimeMillis()
+        Log.d(TAG, "🌐 Estado inicial de internet: ${if (isInternetAvailable) "disponível" else "indisponível"}")
+        
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Log.d(TAG, "🌐 Internet disponível!")
+                isInternetAvailable = true
+                lastInternetTime = System.currentTimeMillis()
+                
+                // Se foi desbloqueado por falta de internet, rebloqueia quando volta
+                if (wasUnlockedDueToNoInternet) {
+                    Log.d(TAG, "🔄 Internet voltou - sincronizando status com Supabase...")
+                    serviceScope.launch {
+                        try {
+                            // Busca status real do Supabase
+                            val status = withContext(Dispatchers.IO) {
+                                supabaseManager.getDeviceStatus(deviceId)
+                            }
+                            
+                            val realIsActive = status?.isActive ?: false
+                            val realKioskMode = status?.kioskMode ?: false
+                            
+                            Log.d(TAG, "📡 Status do Supabase: is_active=$realIsActive, kiosk_mode=$realKioskMode")
+                            
+                            // Atualiza cache com status real
+                            preferenceManager.saveIsActiveCached(realIsActive)
+                            preferenceManager.saveKioskModeCached(realKioskMode)
+                            preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                            
+                            // Atualiza variáveis locais
+                            isActive = realIsActive
+                            kioskMode = realKioskMode
+                            
+                            // Aplica configurações baseadas no status real
+                            if (realIsActive) {
+                                Log.d(TAG, "🔒 Rebloqueando (is_active=true do Supabase)")
+                                applyAppBlocking()
+                                enableGelaFitKioskMode()
+                                showAppsGrid()
+                            } else {
+                                Log.d(TAG, "🔓 Mantendo desbloqueado (is_active=false do Supabase)")
+                                removeAppBlocking()
+                                disableGelaFitKioskMode()
+                                hideAppsGrid()
+                            }
+                            
+                            runOnUiThread {
+                                updateKioskButtonVisibility(realIsActive, realKioskMode)
+                                Toast.makeText(this@GelaFitWorkspaceActivity, "Internet reconectada - status sincronizado", Toast.LENGTH_SHORT).show()
+                            }
+                            
+                            wasUnlockedDueToNoInternet = false
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ Erro ao sincronizar status após reconexão: ${e.message}", e)
+                        }
+                    }
+                }
+            }
+            
+            override fun onLost(network: Network) {
+                Log.d(TAG, "❌ Internet perdida!")
+                if (isInternetAvailable) {
+                    // Só atualiza se estava com internet antes
+                    isInternetAvailable = false
+                    lastInternetTime = System.currentTimeMillis() // Inicia contador quando perde internet
+                    Log.d(TAG, "⏱️ Contador de tempo sem internet iniciado")
+                }
+            }
+            
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                        networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                
+                if (hasInternet && !isInternetAvailable) {
+                    // Internet voltou
+                    onAvailable(network)
+                } else if (!hasInternet && isInternetAvailable) {
+                    // Internet perdida
+                    onLost(network)
+                }
+            }
+        }
+        
+        // Registra o callback
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            .build()
+        
+        connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+        Log.d(TAG, "🌐 Monitoramento de rede iniciado")
+        
+        // Inicia job para verificar tempo sem internet
+        networkMonitoringJob = serviceScope.launch {
+            while (isMonitoring) {
+                try {
+                    val now = System.currentTimeMillis()
+                    val timeWithoutInternet = now - lastInternetTime
+                    val fiveMinutesInMs = 5 * 60 * 1000L
+                    
+                    // Se está sem internet há mais de 5 minutos E is_active está ativo E não foi desbloqueado por falta de internet ainda
+                    if (!isInternetAvailable && timeWithoutInternet >= fiveMinutesInMs && isActive == true && !wasUnlockedDueToNoInternet) {
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        Log.d(TAG, "⏰ 5 minutos sem internet - Desbloqueando automaticamente")
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        
+                        // Desbloqueia mudando o cache para false
+                        preferenceManager.saveIsActiveCached(false)
+                        preferenceManager.saveGelaFitUnlocked(true)
+                        preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                        
+                        // Atualiza variável local
+                        isActive = false
+                        wasUnlockedDueToNoInternet = true
+                        
+                        // Remove bloqueios
+                        removeAppBlocking()
+                        disableGelaFitKioskMode()
+                        hideAppsGrid()
+                        
+                        runOnUiThread {
+                            updateKioskButtonVisibility(false, kioskMode == true)
+                            vibrateShort()
+                            Toast.makeText(this@GelaFitWorkspaceActivity, "Desbloqueado automaticamente (sem internet há 5 minutos)", Toast.LENGTH_LONG).show()
+                        }
+                        
+                        Log.d(TAG, "✅ Desbloqueado automaticamente por falta de internet")
+                    }
+                    
+                    delay(10000) // Verifica a cada 10 segundos
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Erro no monitoramento de rede: ${e.message}", e)
+                    delay(30000) // Em caso de erro, aguarda mais tempo
+                }
+            }
+        }
+    }
+    
+    /**
+     * Para monitoramento de conectividade de rede
+     */
+    private fun stopNetworkMonitoring() {
+        networkMonitoringJob?.cancel()
+        networkMonitoringJob = null
+        
+        networkCallback?.let {
+            try {
+                connectivityManager?.unregisterNetworkCallback(it)
+                Log.d(TAG, "🌐 Monitoramento de rede parado")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao desregistrar network callback: ${e.message}", e)
+            }
+        }
+        networkCallback = null
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
         
         // Para monitoramento Realtime
         stopMonitoring()
+        
+        // Para monitoramento de rede
+        stopNetworkMonitoring()
         
         // Desregistra receiver
         try {

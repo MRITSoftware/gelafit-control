@@ -53,13 +53,13 @@ class SupabaseManager {
                 }
                 .decodeSingle<DeviceCommand>()
             
-            Log.d(TAG, "✅ Comando encontrado! ID: ${response.id}, Command: ${response.command}, Created: ${response.created_at}")
+            Log.d(TAG, "✅ Comando encontrado! ID: ${response.id}, Command: ${response.command}, Created: ${response.created_at}, Executed: ${response.executed}")
             response
         } catch (e: Exception) {
             if (e.message?.contains("No rows") == true || 
                 e.message?.contains("not found") == true ||
                 e.message?.contains("No value") == true) {
-                // Log apenas a cada 10 verificações para não poluir o log
+                // Log apenas a cada 30 verificações para não poluir o log
                 // Log.d(TAG, "ℹ️ Nenhum comando de reiniciar app pendente para device: $deviceId")
                 null
             } else {
@@ -572,7 +572,6 @@ class SupabaseManager {
     fun subscribeToRestartCommands(deviceId: String): kotlinx.coroutines.flow.Flow<DeviceCommand> {
         return flow {
             var lastCommandId: String? = null
-            var lastExecutedState: Boolean? = null
             var checkCount = 0
             
             while (true) {
@@ -587,34 +586,31 @@ class SupabaseManager {
                         Log.d(TAG, "🔍 Verificando comandos... (device: $deviceId, verificação #$checkCount)")
                     }
                     
-                    // Emite se há comando pendente (não executado) e:
-                    // 1. É um comando novo (ID diferente), OU
-                    // 2. É o mesmo comando mas ainda não foi executado (executed mudou de true para false)
+                    // Emite se há comando pendente (não executado) e é um comando novo (ID diferente)
                     if (command != null && command.id != null) {
                         val isNewCommand = command.id != lastCommandId
-                        val wasExecuted = lastExecutedState == true
-                        val isNowPending = !command.executed
                         
-                        if (isNewCommand || (wasExecuted && isNowPending)) {
+                        if (isNewCommand && !command.executed) {
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                             Log.d(TAG, "🔄 COMANDO DE REINICIAR APP DETECTADO!")
                             Log.d(TAG, "📋 ID: ${command.id}")
                             Log.d(TAG, "📱 Device: $deviceId")
-                            Log.d(TAG, "🆕 Novo comando: $isNewCommand")
-                            Log.d(TAG, "✅ Executado antes: $wasExecuted")
+                            Log.d(TAG, "📅 Created: ${command.created_at}")
+                            Log.d(TAG, "✅ Executed: ${command.executed}")
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                             emit(command)
                             lastCommandId = command.id
-                            lastExecutedState = command.executed
-                        } else if (command.executed) {
-                            // Se o comando foi executado, atualiza o estado mas não emite
-                            lastCommandId = command.id
-                            lastExecutedState = true
+                        } else if (!isNewCommand && command.executed) {
+                            // Se o comando foi executado, reseta para permitir detectar novos comandos
+                            Log.d(TAG, "ℹ️ Comando ${command.id} já foi executado, resetando estado...")
+                            lastCommandId = null
                         }
                     } else {
-                        // Se não há comando, reseta o estado
-                        lastCommandId = null
-                        lastExecutedState = null
+                        // Se não há comando, reseta o estado para permitir detectar novos comandos
+                        if (lastCommandId != null) {
+                            Log.d(TAG, "ℹ️ Nenhum comando pendente, resetando estado...")
+                            lastCommandId = null
+                        }
                     }
                     
                     delay(1000) // Verifica a cada 1 segundo para resposta rápida
