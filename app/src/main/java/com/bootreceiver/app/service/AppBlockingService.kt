@@ -61,18 +61,21 @@ class AppBlockingService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val newIsActive = intent?.getBooleanExtra("is_active", false) ?: false
+        // Verifica o cache primeiro (fonte de verdade)
+        val cachedIsActive = preferenceManager.getIsActiveCached()
+        val newIsActive = intent?.getBooleanExtra("is_active", cachedIsActive) ?: cachedIsActive
         
         Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         if (newIsActive) {
-            Log.d(TAG, "🔒 BLOQUEIO DE APPS ATIVADO")
+            Log.d(TAG, "🔒 BLOQUEIO DE APPS ATIVADO (cache: $cachedIsActive)")
             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         } else {
-            Log.d(TAG, "🔓 BLOQUEIO DE APPS DESATIVADO")
+            Log.d(TAG, "🔓 BLOQUEIO DE APPS DESATIVADO (cache: $cachedIsActive)")
             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         }
         
-        isActive = newIsActive
+        // Usa o cache como fonte de verdade
+        isActive = cachedIsActive
         
         // CRÍTICO: startForeground() DEVE ser chamado IMEDIATAMENTE quando iniciado como foreground service
         // Isso evita o erro ForegroundServiceDidNotStartInTimeException
@@ -87,10 +90,11 @@ class AppBlockingService : Service() {
             }
         }
         
-        if (isActive && !isRunning) {
+        // Sempre inicia o monitoramento (ele verifica o cache a cada 0.5s)
+        if (!isRunning) {
             try {
                 isRunning = true
-                Log.d(TAG, "AppBlockingService iniciado")
+                Log.d(TAG, "AppBlockingService iniciado - monitorando cache a cada 0.5s")
                 
                 // Inicia o monitoramento
                 serviceScope.launch {
@@ -100,11 +104,6 @@ class AppBlockingService : Service() {
                 Log.e(TAG, "Erro crítico ao iniciar serviço: ${e.message}", e)
                 isRunning = false
             }
-        } else if (!isActive && isRunning) {
-            // Se is_active foi desativado, para o serviço
-            Log.d(TAG, "is_active desativado - parando serviço")
-            isRunning = false
-            stopSelf()
         }
         
         return START_STICKY
@@ -155,51 +154,72 @@ class AppBlockingService : Service() {
     
     /**
      * Inicia monitoramento constante de apps em foreground
+     * Verifica o cache a cada 0.5s para resposta rápida
      */
     private suspend fun startMonitoring() {
-        while (isRunning && isActive) {
+        while (isRunning) {
             try {
-                val targetPackage = preferenceManager.getTargetPackageName()
+                // Verifica o cache a cada 0.5s para resposta rápida
+                val cachedIsActive = preferenceManager.getIsActiveCached()
                 
-                if (targetPackage.isNullOrEmpty()) {
-                    Log.w(TAG, "Nenhum app configurado. Aguardando...")
-                    delay(CHECK_INTERVAL_MS)
-                    continue
-                }
-                
-                // Verifica qual app está em foreground
-                val foregroundInfo = getForegroundInfo()
-                
-                if (foregroundInfo != null) {
-                    val foregroundPackage = foregroundInfo.packageName
-                    val foregroundActivity = foregroundInfo.activityName
+                // Se is_active mudou no cache, atualiza a variável local
+                if (cachedIsActive != isActive) {
+                    isActive = cachedIsActive
+                    Log.d(TAG, "🔄 Status atualizado do cache: is_active=$isActive")
                     
-                    // Permite activities específicas do GelaFit Control mesmo com kiosk ativo
-                    val isAllowedActivity = foregroundActivity != null && allowedActivities.any { 
-                        foregroundActivity.contains(it.substringAfterLast("."))
-                    }
-                    
-                    // Se não é o app configurado nem um app permitido, bloqueia
-                    if (foregroundPackage != targetPackage && 
-                        !allowedPackages.contains(foregroundPackage) && 
-                        !isAllowedActivity) {
-                        Log.w(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                        Log.w(TAG, "🚫 APP NÃO AUTORIZADO DETECTADO: $foregroundPackage")
-                        Log.w(TAG, "🔄 Fechando app não autorizado e mostrando tela do control...")
-                        Log.w(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                        
-                        // Fecha o app não autorizado
-                        closeApp(foregroundPackage)
-                        
-                        // Aguarda um pouco e abre a tela do control (não o app diretamente)
-                        delay(500)
-                        openControlScreen()
-                    } else if (isAllowedActivity) {
-                        Log.d(TAG, "✅ Activity permitida detectada: $foregroundActivity")
+                    // Se is_active foi desativado, para o monitoramento
+                    if (!isActive) {
+                        Log.d(TAG, "is_active desativado no cache - parando monitoramento")
+                        isRunning = false
+                        stopSelf()
+                        break
                     }
                 }
                 
-                delay(CHECK_INTERVAL_MS)
+                // Se is_active está ativo, continua monitorando
+                if (isActive) {
+                    val targetPackage = preferenceManager.getTargetPackageName()
+                    
+                    if (targetPackage.isNullOrEmpty()) {
+                        Log.w(TAG, "Nenhum app configurado. Aguardando...")
+                        delay(CACHE_CHECK_INTERVAL_MS)
+                        continue
+                    }
+                    
+                    // Verifica qual app está em foreground
+                    val foregroundInfo = getForegroundInfo()
+                    
+                    if (foregroundInfo != null) {
+                        val foregroundPackage = foregroundInfo.packageName
+                        val foregroundActivity = foregroundInfo.activityName
+                        
+                        // Permite activities específicas do GelaFit Control mesmo com kiosk ativo
+                        val isAllowedActivity = foregroundActivity != null && allowedActivities.any { 
+                            foregroundActivity.contains(it.substringAfterLast("."))
+                        }
+                        
+                        // Se não é o app configurado nem um app permitido, bloqueia
+                        if (foregroundPackage != targetPackage && 
+                            !allowedPackages.contains(foregroundPackage) && 
+                            !isAllowedActivity) {
+                            Log.w(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            Log.w(TAG, "🚫 APP NÃO AUTORIZADO DETECTADO: $foregroundPackage")
+                            Log.w(TAG, "🔄 Fechando app não autorizado e mostrando tela do control...")
+                            Log.w(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            
+                            // Fecha o app não autorizado
+                            closeApp(foregroundPackage)
+                            
+                            // Aguarda um pouco e abre a tela do control (não o app diretamente)
+                            delay(100)
+                            openControlScreen()
+                        } else if (isAllowedActivity) {
+                            Log.d(TAG, "✅ Activity permitida detectada: $foregroundActivity")
+                        }
+                    }
+                }
+                
+                delay(CACHE_CHECK_INTERVAL_MS)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro no monitoramento: ${e.message}", e)
                 delay(ERROR_RETRY_DELAY_MS)
@@ -367,7 +387,7 @@ class AppBlockingService : Service() {
         private const val TAG = "AppBlockingService"
         private const val CHANNEL_ID = "app_blocking_channel"
         private const val NOTIFICATION_ID = 3
-        private const val CHECK_INTERVAL_MS = 1000L // Verifica a cada 1 segundo (muito rápido)
+        private const val CACHE_CHECK_INTERVAL_MS = 500L // Verifica cache a cada 0.5s para resposta rápida
         private const val ERROR_RETRY_DELAY_MS = 5000L // Em caso de erro, aguarda 5 segundos
     }
 }

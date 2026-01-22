@@ -64,7 +64,10 @@ class AppRestartMonitorService : Service() {
         
         try {
             isRunning = true
-            Log.d(TAG, "AppRestartMonitorService iniciado para dispositivo: $deviceId")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "🔄 AppRestartMonitorService iniciado")
+            Log.d(TAG, "📱 Device ID: $deviceId")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             
             // Garante que o canal de notificação existe
             createNotificationChannel()
@@ -146,13 +149,24 @@ class AppRestartMonitorService : Service() {
      * Usa polling otimizado (1 segundo) para detectar comandos rapidamente
      */
     private fun startMonitoring() {
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         Log.d(TAG, "🔄 Iniciando monitoramento REALTIME de comandos (1 segundo)")
+        Log.d(TAG, "📱 Device ID: $deviceId")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         
         monitoringJob = serviceScope.launch {
             try {
                 supabaseManager.subscribeToRestartCommands(deviceId)
                     .onEach { command ->
                         // Recebe comandos em tempo real
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        Log.d(TAG, "📨 COMANDO RECEBIDO NO FLOW!")
+                        Log.d(TAG, "📋 ID: ${command.id}")
+                        Log.d(TAG, "📱 Device: ${command.device_id}")
+                        Log.d(TAG, "🔄 Command: ${command.command}")
+                        Log.d(TAG, "✅ Executed: ${command.executed}")
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        
                         if (!isRestarting) {
                             Log.d(TAG, "🔄 REALTIME: Comando de reiniciar detectado: ${command.id}")
                             processRestartCommand(command)
@@ -181,6 +195,13 @@ class AppRestartMonitorService : Service() {
      * Processa um comando de reiniciar app
      */
     private suspend fun processRestartCommand(command: DeviceCommand) {
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "📨 PROCESSANDO COMANDO DE REINICIAR APP")
+        Log.d(TAG, "📋 ID: ${command.id}")
+        Log.d(TAG, "📱 Device: ${command.device_id}")
+        Log.d(TAG, "🔄 Command: ${command.command}")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        
         if (isRestarting) {
             Log.d(TAG, "⏳ Reinício já em andamento, ignorando comando...")
             return
@@ -193,19 +214,20 @@ class AppRestartMonitorService : Service() {
         }
         
         isRestarting = true
+        Log.d(TAG, "🔒 Flag isRestarting = true")
         
         val preferenceManager = PreferenceManager(this@AppRestartMonitorService)
         val targetPackageName = preferenceManager.getTargetPackageName()
         
         if (targetPackageName.isNullOrEmpty()) {
-            Log.w(TAG, "Nenhum app configurado. Não é possível reiniciar.")
+            Log.w(TAG, "❌ Nenhum app configurado. Não é possível reiniciar.")
             supabaseManager.markCommandAsExecutedById(commandId)
             if (commandId != null) processedCommandIds.add(commandId)
             isRestarting = false
             return
         }
         
-        Log.d(TAG, "App configurado: $targetPackageName")
+        Log.d(TAG, "✅ App configurado: $targetPackageName")
         
         // Marca como executado ANTES de reiniciar
         val marked = supabaseManager.markCommandAsExecutedById(commandId)
@@ -221,30 +243,24 @@ class AppRestartMonitorService : Service() {
         
         if (commandId != null) processedCommandIds.add(commandId)
         
-        // Reinicia o app
+        // Reinicia o app usando o método restartApp que força fechamento e reabertura
         Log.d(TAG, "🔄 Reiniciando app: $targetPackageName")
         val appLauncher = AppLauncher(this@AppRestartMonitorService)
         
-        // Fecha o app primeiro
-        try {
-            val activityManager = getSystemService(android.app.ActivityManager::class.java)
-            activityManager.killBackgroundProcesses(targetPackageName)
-            Runtime.getRuntime().exec("am force-stop $targetPackageName").waitFor()
-            Log.d(TAG, "✅ App fechado")
-        } catch (e: Exception) {
-            Log.w(TAG, "Erro ao fechar app: ${e.message}")
-        }
-        
-        delay(1000)
-        
-        // Reabre o app
-        val success = appLauncher.launchApp(targetPackageName)
+        // Usa o método restartApp que já faz tudo (fecha e reabre)
+        val success = appLauncher.restartApp(targetPackageName)
         if (success) {
-            Log.d(TAG, "✅ App reiniciado com sucesso!")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "✅✅✅ APP REINICIADO COM SUCESSO! ✅✅✅")
+            Log.d(TAG, "✅ Comando foi executado e marcado como executado no banco")
+            Log.d(TAG, "ℹ️ Não reiniciará novamente até que um NOVO comando seja criado")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         } else {
-            Log.e(TAG, "❌ Falha ao reabrir app")
+            Log.e(TAG, "❌ Falha ao reiniciar app: $targetPackageName")
         }
         
+        // Libera flag de reinício após um tempo
+        delay(5000) // Aguarda 5 segundos antes de liberar
         isRestarting = false
     }
     
