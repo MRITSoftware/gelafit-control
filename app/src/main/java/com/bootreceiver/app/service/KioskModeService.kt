@@ -43,6 +43,7 @@ class KioskModeService : Service() {
     private var lastKioskMode: Boolean? = null
     private var lastIsActive: Boolean? = null
     private var lastWorkspaceLaunchMs: Long = 0
+    private var workspaceMonitoringJob: Job? = null // Job para monitoramento contínuo do workspace
     private val SYNC_INTERVAL_MS = 15 * 60 * 1000L // 15 minutos
     
     override fun onBind(intent: Intent?): IBinder? = null
@@ -175,10 +176,19 @@ class KioskModeService : Service() {
                     if (!kioskMode) {
                         // Mostra a casca simples para o usuário escolher abrir o app
                         maybeLaunchWorkspace()
+                        
+                        // Inicia monitoramento contínuo do workspace se ainda não estiver ativo
+                        if (workspaceMonitoringJob == null || !workspaceMonitoringJob!!.isActive) {
+                            startWorkspaceMonitoring()
+                        }
+                    } else {
+                        // Se kiosk_mode está ativo, para o monitoramento do workspace
+                        stopWorkspaceMonitoring()
                     }
                 } else {
                     stopAppBlocking()
                     setOverlayEnabled(false)
+                    stopWorkspaceMonitoring()
                 }
 
                 // Controle do kiosk do app-alvo
@@ -415,6 +425,153 @@ class KioskModeService : Service() {
     }
     
     /**
+     * Inicia monitoramento contínuo do GelaFitWorkspaceActivity quando is_active = true
+     * Garante que a activity seja reaberta automaticamente se fechar
+     */
+    private fun startWorkspaceMonitoring() {
+        // Para monitoramento anterior se existir
+        stopWorkspaceMonitoring()
+        
+        Log.d(TAG, "🔄 Iniciando monitoramento contínuo do GelaFitWorkspaceActivity")
+        
+        workspaceMonitoringJob = serviceScope.launch {
+            aggressiveWorkspaceMonitoring()
+        }
+    }
+    
+    /**
+     * Para o monitoramento contínuo do workspace
+     */
+    private fun stopWorkspaceMonitoring() {
+        workspaceMonitoringJob?.cancel()
+        workspaceMonitoringJob = null
+        Log.d(TAG, "🛑 Monitoramento do workspace parado")
+    }
+    
+    /**
+     * Monitoramento agressivo do GelaFitWorkspaceActivity quando is_active = true
+     * Verifica constantemente e reabre imediatamente se fechar
+     */
+    private suspend fun aggressiveWorkspaceMonitoring() {
+        var consecutiveFailures = 0
+        val workspacePackage = packageName // Package do próprio GelaFit Control
+        val workspaceActivity = "com.bootreceiver.app.ui.GelaFitWorkspaceActivity"
+        
+        while (isRunning) {
+            try {
+                // Verifica cache para resposta rápida
+                val cachedIsActive = preferenceManager.getIsActiveCached()
+                val cachedKioskMode = preferenceManager.getKioskModeCached()
+                
+                // Só monitora se is_active = true e kiosk_mode = false
+                if (cachedIsActive && !cachedKioskMode) {
+                    if (!isWorkspaceRunning()) {
+                        consecutiveFailures++
+                        Log.d(TAG, "🚨 GELAFIT WORKSPACE FECHADO! REABRINDO IMEDIATAMENTE... (tentativa $consecutiveFailures)")
+                        
+                        // Tenta abrir a workspace múltiplas vezes rapidamente
+                        try {
+                            val intent = Intent(this@KioskModeService, GelaFitWorkspaceActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            }
+                            startActivity(intent)
+                            delay(300) // Aguarda 300ms
+                            
+                            // Se ainda não está rodando, tenta novamente
+                            if (!isWorkspaceRunning()) {
+                                Log.d(TAG, "⚠️ Tentativa 2: Reabrindo workspace...")
+                                startActivity(intent)
+                                delay(500)
+                            }
+                            
+                            // Se ainda não está rodando, tenta mais uma vez
+                            if (!isWorkspaceRunning()) {
+                                Log.d(TAG, "⚠️ Tentativa 3: Reabrindo workspace...")
+                                startActivity(intent)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Erro ao reabrir workspace: ${e.message}", e)
+                        }
+                    } else {
+                        // Workspace está rodando, reseta contador de falhas
+                        if (consecutiveFailures > 0) {
+                            Log.d(TAG, "✅ Workspace reaberto com sucesso após $consecutiveFailures tentativas")
+                            consecutiveFailures = 0
+                        }
+                    }
+                    delay(CHECK_INTERVAL_MS) // Verifica muito frequentemente
+                } else {
+                    // Se is_active foi desativado ou kiosk_mode foi ativado, para o monitoramento
+                    Log.d(TAG, "🔓 Condições mudaram - parando monitoramento do workspace")
+                    break
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro no monitoramento do workspace: ${e.message}", e)
+                delay(ERROR_RETRY_DELAY_MS)
+            }
+        }
+    }
+    
+    /**
+     * Verifica se o GelaFitWorkspaceActivity está rodando
+     */
+    private fun isWorkspaceRunning(): Boolean {
+        try {
+            val activityManager = getSystemService(ActivityManager::class.java)
+            val workspaceActivity = "com.bootreceiver.app.ui.GelaFitWorkspaceActivity"
+            
+            // Método 1: Verifica a activity no topo (mais confiável)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val runningTasks = activityManager.getAppTasks()
+                if (runningTasks != null && runningTasks.isNotEmpty()) {
+                    for (task in runningTasks) {
+                        val taskInfo = task.taskInfo
+                        if (taskInfo != null && taskInfo.topActivity != null) {
+                            val activityName = taskInfo.topActivity!!.className
+                            if (activityName == workspaceActivity) {
+                                return true
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Método alternativo para versões antigas
+                @Suppress("DEPRECATION")
+                val runningTasks = activityManager.getRunningTasks(1)
+                if (runningTasks.isNotEmpty()) {
+                    val topActivity = runningTasks[0].topActivity
+                    if (topActivity != null && topActivity.className == workspaceActivity) {
+                        return true
+                    }
+                }
+            }
+            
+            // Método 2: Verifica processos em foreground
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                val runningProcesses = activityManager.runningAppProcesses
+                val isForeground = runningProcesses?.any { 
+                    it.processName == packageName && 
+                    (it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
+                     it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE)
+                } == true
+                
+                if (isForeground) {
+                    // Verifica se a activity específica está rodando
+                    // Se o processo está em foreground, assume que a workspace pode estar rodando
+                    return true
+                }
+            }
+            
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao verificar se workspace está rodando: ${e.message}", e)
+            return false
+        }
+    }
+    
+    /**
      * Garante que o app configurado esteja rodando (se kiosk estiver ativo)
      * Verifica mais frequentemente quando kiosk está ativo
      */
@@ -526,6 +683,9 @@ class KioskModeService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "⚠️ KioskModeService destruído - tentando reiniciar...")
+        
+        // Para monitoramento do workspace
+        stopWorkspaceMonitoring()
         
         // Sempre tenta reiniciar o serviço (não depende do kiosk mode)
         // Isso garante que o serviço sempre esteja rodando
