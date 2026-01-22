@@ -73,21 +73,41 @@ class AppLauncher(private val context: Context) {
                 return false
             }
             
-            // Método 1: Usar ActivityManager para fechar processos
+            // Método 1: Tenta múltiplas formas de fechar o app
+            var appClosed = false
+            
+            // Tenta usar ActivityManager primeiro (requer permissão KILL_BACKGROUND_PROCESSES)
             try {
+                Log.d(TAG, "🛑 Tentando fechar app usando ActivityManager...")
                 val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-                
-                // Fecha processos em background (pode não fechar se estiver em foreground)
                 activityManager.killBackgroundProcesses(packageName)
-                Log.d(TAG, "Processos em background finalizados")
-                
-                // Aguarda um pouco
-                Thread.sleep(1000)
+                Log.d(TAG, "✅ killBackgroundProcesses executado")
+                appClosed = true
             } catch (e: Exception) {
-                Log.w(TAG, "Erro ao finalizar processos: ${e.message}")
+                Log.w(TAG, "⚠️ Erro ao usar killBackgroundProcesses: ${e.message}")
             }
             
-            // Método 2: Reabrir o app com flags que forçam recriação
+            // Tenta usar am force-stop (pode não funcionar sem permissões de sistema)
+            try {
+                Log.d(TAG, "🛑 Tentando fechar app usando am force-stop...")
+                val process = Runtime.getRuntime().exec("am force-stop $packageName")
+                val exitCode = process.waitFor()
+                Log.d(TAG, "✅ am force-stop executado (exit code: $exitCode)")
+                appClosed = true
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Erro ao usar am force-stop (pode ser falta de permissões): ${e.message}")
+            }
+            
+            // Aguarda um pouco para garantir que o app foi fechado
+            if (appClosed) {
+                Thread.sleep(2000) // Aguarda 2 segundos se conseguiu fechar
+                Log.d(TAG, "⏳ Aguardou 2s após tentar fechar app")
+            } else {
+                Thread.sleep(1000) // Aguarda menos se não conseguiu fechar
+                Log.d(TAG, "⏳ Aguardou 1s (não foi possível fechar app completamente)")
+            }
+            
+            // Método 2: Reabrir o app com flags que forçam recriação completa
             try {
                 val packageManager = context.packageManager
                 val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
@@ -97,7 +117,7 @@ class AppLauncher(private val context: Context) {
                     return false
                 }
                 
-                // Flags para forçar reinício completo
+                // Flags para forçar reinício completo e recriação
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -106,7 +126,7 @@ class AppLauncher(private val context: Context) {
                 
                 // Abre o app
                 context.startActivity(launchIntent)
-                Log.d(TAG, "✅ App reiniciado com sucesso: $packageName")
+                Log.d(TAG, "✅ App reaberto com sucesso: $packageName")
                 return true
                 
             } catch (e: Exception) {
