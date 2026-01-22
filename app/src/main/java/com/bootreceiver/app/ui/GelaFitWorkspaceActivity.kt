@@ -399,58 +399,64 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      * Ativa o modo kiosk do app escolhido
      */
     private fun activateKioskMode() {
-        AlertDialog.Builder(this)
-            .setTitle("Ativar modo kiosk?")
-            .setMessage("O app ficará fixo na tela. Deseja ativar?")
-            .setPositiveButton("Ativar") { _, _ ->
-                serviceScope.launch {
-                    try {
-                        val success = withContext(Dispatchers.IO) {
-                            supabaseManager.updateKioskMode(deviceId, true)
-                        }
-                        
-                        if (success) {
-                            // Atualiza cache local imediatamente e reseta estado de desbloqueio
-                            preferenceManager.saveKioskModeCached(true)
-                            preferenceManager.saveTargetAppUnlocked(false) // Reseta desbloqueio ao ativar kiosk
-                            preferenceManager.saveStatusLastSync(System.currentTimeMillis())
-                            
-                            // Atualiza variáveis locais da Activity imediatamente
-                            kioskMode = true
-                            
-                            // Aplica as mudanças imediatamente
-                            enableKioskMode()
-                            updateKioskButtonVisibility(isActive == true, true)
-                            
-                            val targetPackage = preferenceManager.getTargetPackageName()
-                            if (!targetPackage.isNullOrEmpty()) {
-                                openConfiguredApp(targetPackage)
+        runOnUiThread {
+            AlertDialog.Builder(this)
+                .setTitle("Ativar modo kiosk?")
+                .setMessage("O app ficará fixo na tela. Deseja ativar?")
+                .setPositiveButton("Ativar") { _, _ ->
+                    serviceScope.launch {
+                        try {
+                            val success = withContext(Dispatchers.IO) {
+                                supabaseManager.updateKioskMode(deviceId, true)
                             }
                             
-                            Log.d(TAG, "✅ Modo kiosk ativado - banco atualizado, cache atualizado, variáveis locais atualizadas")
-                        } else {
+                            if (success) {
+                                // Atualiza cache local imediatamente e reseta estado de desbloqueio
+                                preferenceManager.saveKioskModeCached(true)
+                                preferenceManager.saveTargetAppUnlocked(false) // Reseta desbloqueio ao ativar kiosk
+                                preferenceManager.saveStatusLastSync(System.currentTimeMillis())
+                                
+                                // Atualiza variáveis locais da Activity imediatamente
+                                kioskMode = true
+                                
+                                // Aplica as mudanças imediatamente
+                                runOnUiThread {
+                                    enableKioskMode()
+                                    updateKioskButtonVisibility(isActive == true, true)
+                                    
+                                    val targetPackage = preferenceManager.getTargetPackageName()
+                                    if (!targetPackage.isNullOrEmpty()) {
+                                        openConfiguredApp(targetPackage)
+                                    }
+                                    
+                                    Toast.makeText(this@GelaFitWorkspaceActivity, "Modo kiosk ativado", Toast.LENGTH_SHORT).show()
+                                }
+                                
+                                Log.d(TAG, "✅ Modo kiosk ativado - banco atualizado, cache atualizado, variáveis locais atualizadas")
+                            } else {
+                                runOnUiThread {
+                                    AlertDialog.Builder(this@GelaFitWorkspaceActivity)
+                                        .setTitle("Erro")
+                                        .setMessage("Não foi possível ativar o modo kiosk no servidor.")
+                                        .setPositiveButton("OK", null)
+                                        .show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Erro ao ativar modo kiosk: ${e.message}", e)
                             runOnUiThread {
                                 AlertDialog.Builder(this@GelaFitWorkspaceActivity)
                                     .setTitle("Erro")
-                                    .setMessage("Não foi possível ativar o modo kiosk no servidor.")
+                                    .setMessage("Não foi possível ativar o modo kiosk: ${e.message}")
                                     .setPositiveButton("OK", null)
                                     .show()
                             }
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Erro ao ativar modo kiosk: ${e.message}", e)
-                        runOnUiThread {
-                            AlertDialog.Builder(this@GelaFitWorkspaceActivity)
-                                .setTitle("Erro")
-                                .setMessage("Não foi possível ativar o modo kiosk: ${e.message}")
-                                .setPositiveButton("OK", null)
-                                .show()
-                        }
                     }
                 }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
     }
     
     /**
@@ -492,30 +498,44 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
      * Verifica configurações necessárias
      */
     private fun checkSettings() {
-        // Permite abrir mesmo com kiosk ativo (para testes)
-        isOpeningAllowedActivity = true // Marca que estamos abrindo uma activity permitida
-        val intent = Intent(this, SettingsCheckActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
-        // Reseta a flag após um delay para permitir que a activity abra
-        Handler(Looper.getMainLooper()).postDelayed({
+        try {
+            // Permite abrir mesmo com kiosk ativo
+            isOpeningAllowedActivity = true
+            val intent = Intent(this, SettingsCheckActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            startActivity(intent)
+            // Reseta a flag após um delay para permitir que a activity abra
+            Handler(Looper.getMainLooper()).postDelayed({
+                isOpeningAllowedActivity = false
+            }, 1000)
+            Log.d(TAG, "✅ Abrindo SettingsCheckActivity")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao abrir SettingsCheckActivity: ${e.message}", e)
+            Toast.makeText(this, "Erro ao abrir configurações: ${e.message}", Toast.LENGTH_SHORT).show()
             isOpeningAllowedActivity = false
-        }, 500)
+        }
     }
     
     /**
      * Adiciona produto ao grid
      */
     private fun addProductToGrid() {
-        // Permite abrir mesmo com kiosk ativo (para testes)
-        isOpeningAllowedActivity = true // Marca que estamos abrindo uma activity permitida
-        val intent = Intent(this, AddProductActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
-        // Reseta a flag após um delay para permitir que a activity abra
-        Handler(Looper.getMainLooper()).postDelayed({
+        try {
+            // Permite abrir mesmo com kiosk ativo
+            isOpeningAllowedActivity = true
+            val intent = Intent(this, AddProductActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            startActivity(intent)
+            // Reseta a flag após um delay para permitir que a activity abra
+            Handler(Looper.getMainLooper()).postDelayed({
+                isOpeningAllowedActivity = false
+            }, 1000)
+            Log.d(TAG, "✅ Abrindo AddProductActivity")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao abrir AddProductActivity: ${e.message}", e)
+            Toast.makeText(this, "Erro ao adicionar produto: ${e.message}", Toast.LENGTH_SHORT).show()
             isOpeningAllowedActivity = false
-        }, 500)
+        }
     }
     
     /**
@@ -609,8 +629,8 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     }
     
     /**
-     * Inicia monitoramento REALTIME do status is_active e modo_kiosk no Supabase
-     * Usa Supabase Realtime em vez de polling para receber mudanças instantaneamente
+     * Inicia monitoramento via polling do status is_active e modo_kiosk no Supabase
+     * Polling atualiza o cache a cada 1 minuto
      */
     private fun startMonitoring() {
         if (isMonitoring) {
@@ -654,27 +674,36 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             }
         }
         
-        // Agora inicia subscription REALTIME
+        // Inicia polling que atualiza o cache a cada 1 minuto
         realtimeJob = serviceScope.launch {
             try {
-                supabaseManager.subscribeToDeviceChanges(deviceId)
-                    .onEach { status ->
-                        // Recebe mudanças em tempo real do banco
-                        val currentIsActive = status.isActive
-                        val currentKioskMode = status.kioskMode
+                while (isMonitoring) {
+                    try {
+                        val status = withContext(Dispatchers.IO) {
+                            supabaseManager.getDeviceStatus(deviceId)
+                        }
                         
-                        Log.d(TAG, "🔄 REALTIME: Mudança detectada - is_active: $currentIsActive, modo_kiosk: $currentKioskMode")
+                        val currentIsActive = status?.isActive ?: false
+                        val currentKioskMode = status?.kioskMode ?: false
                         
-                        // Atualiza cache
+                        Log.d(TAG, "🔄 POLLING: Status atualizado - is_active: $currentIsActive, modo_kiosk: $currentKioskMode")
+                        
+                        // Atualiza cache (polling apenas atualiza o cache)
                         preferenceManager.saveIsActiveCached(currentIsActive)
                         preferenceManager.saveKioskModeCached(currentKioskMode)
                         preferenceManager.saveStatusLastSync(System.currentTimeMillis())
                         
-                        // Atualiza visibilidade dos botões
-                        updateKioskButtonVisibility(currentIsActive == true, currentKioskMode == true)
+                        // Atualiza variáveis locais e visibilidade dos botões
+                        val statusChanged = (isActive != currentIsActive) || (kioskMode != currentKioskMode)
+                        isActive = currentIsActive
+                        kioskMode = currentKioskMode
+                        
+                        runOnUiThread {
+                            updateKioskButtonVisibility(currentIsActive == true, currentKioskMode == true)
+                        }
                         
                         // Se mudou o status, aplica as mudanças
-                        if (isActive != currentIsActive || kioskMode != currentKioskMode) {
+                        if (statusChanged) {
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                             if (currentIsActive == true) {
                                 Log.d(TAG, "🔒 IS_ACTIVE ATIVADO - Bloqueando acesso a outros apps e mantendo GelaFit Control em modo kiosk")
@@ -703,9 +732,6 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                                 }
                             }
                             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                            
-                            isActive = currentIsActive
-                            kioskMode = currentKioskMode
                         }
                         
                         // Garante que o app está em foreground se necessário
@@ -717,40 +743,27 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
                         } else {
                             disableGelaFitKioskMode()
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro no polling: ${e.message}", e)
                     }
-                    .catch { e ->
-                        Log.e(TAG, "❌ Erro no Realtime: ${e.message}", e)
-                        // Em caso de erro, tenta reconectar após delay
-                        delay(ERROR_RETRY_DELAY_MS)
-                        if (isMonitoring) {
-                            // Tenta reconectar
-                            realtimeJob?.cancel()
-                            startMonitoring()
-                        }
-                    }
-                    .launchIn(this)
+                    
+                    // Aguarda 1 minuto antes da próxima verificação
+                    delay(POLLING_INTERVAL_MS)
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Erro ao iniciar subscription Realtime: ${e.message}", e)
+                Log.e(TAG, "❌ Erro ao iniciar polling: ${e.message}", e)
                 isMonitoring = false
             }
         }
     }
     
     /**
-     * Para o monitoramento Realtime
+     * Para o monitoramento (polling)
      */
     private fun stopMonitoring() {
         isMonitoring = false
         realtimeJob?.cancel()
         realtimeJob = null
-        
-        serviceScope.launch {
-            try {
-                supabaseManager.unsubscribeFromDeviceChanges(deviceId)
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro ao parar monitoramento: ${e.message}", e)
-            }
-        }
     }
     
     /**
@@ -1011,31 +1024,33 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             return
         }
         
-        // Verifica se está desbloqueado individualmente (usa cache local para resposta imediata)
+        // Verifica cache para resposta imediata (verifica a cada 0.5s no serviço)
+        val cachedIsActive = preferenceManager.getIsActiveCached()
+        val cachedKioskMode = preferenceManager.getKioskModeCached()
         val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
         val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
         
         // Se is_active está ativo E não está desbloqueado, impede que a activity seja pausada (minimizada)
-        if (isActive == true && !gelafitUnlocked && kioskMode != true) {
+        if (cachedIsActive && !gelafitUnlocked && !cachedKioskMode) {
             Log.d(TAG, "🔒 Tentativa de pausar bloqueada (is_active = true, não desbloqueado)")
             // Reabre INSTANTANEAMENTE sem delay para resposta imediata
             Handler(Looper.getMainLooper()).post {
-                showAppsGrid()
-                // Garante que a activity está em foreground
-                if (!isFinishing) {
+                // Garante que a activity está visível antes de reabrir
+                if (!isFinishing && !isDestroyed) {
+                    showAppsGrid()
                     val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    intent.flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     startActivity(intent)
                 }
             }
-        } else if (kioskMode == true && !targetAppUnlocked) {
+        } else if (cachedKioskMode && !targetAppUnlocked) {
             // Quando modo_kiosk está ativo E não está desbloqueado, abre o app automaticamente
-            Handler(Looper.getMainLooper()).postDelayed({
+            Handler(Looper.getMainLooper()).post {
                 val targetPackage = preferenceManager.getTargetPackageName()
                 if (!targetPackage.isNullOrEmpty()) {
                     openConfiguredApp(targetPackage)
                 }
-            }, 100) // Delay mínimo para resposta rápida
+            }
         } else {
             // Se está desbloqueado, permite minimizar normalmente
             Log.d(TAG, "🔓 Pausa permitida (desbloqueado)")
@@ -1076,12 +1091,14 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     }
     
     override fun onBackPressed() {
-        // Verifica se está desbloqueado individualmente
+        // Verifica cache para resposta imediata
+        val cachedIsActive = preferenceManager.getIsActiveCached()
+        val cachedKioskMode = preferenceManager.getKioskModeCached()
         val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
         val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
         
         // Se is_active está ativo E não está desbloqueado, bloqueia o botão voltar
-        if (isActive == true && !gelafitUnlocked && kioskMode != true) {
+        if (cachedIsActive && !gelafitUnlocked && !cachedKioskMode) {
             Log.d(TAG, "🔒 Botão voltar bloqueado (is_active = true, não desbloqueado)")
             // Apenas mostra o grid, não abre o app
             showAppsGrid()
@@ -1089,7 +1106,7 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
         }
         
         // Se modo_kiosk está ativo E não está desbloqueado, bloqueia o botão voltar e abre o app
-        if (kioskMode == true && !targetAppUnlocked) {
+        if (cachedKioskMode && !targetAppUnlocked) {
             Log.d(TAG, "🔒 Botão voltar bloqueado (modo_kiosk = true, não desbloqueado)")
             val targetPackage = preferenceManager.getTargetPackageName()
             if (!targetPackage.isNullOrEmpty()) {
@@ -1103,16 +1120,22 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     }
     
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // Verifica cache para resposta imediata
+        val cachedIsActive = preferenceManager.getIsActiveCached()
+        val cachedKioskMode = preferenceManager.getKioskModeCached()
+        val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
+        val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
+        
         // Se is_active ou modo_kiosk está ativo, bloqueia botão Home
-        if (keyCode == KeyEvent.KEYCODE_HOME && (isActive == true || kioskMode == true)) {
+        if (keyCode == KeyEvent.KEYCODE_HOME && (cachedIsActive || cachedKioskMode)) {
             Log.d(TAG, "🔒 Botão Home bloqueado")
-            if (kioskMode == true) {
+            if (cachedKioskMode && !targetAppUnlocked) {
                 // Quando modo_kiosk está ativo, abre o app
                 val targetPackage = preferenceManager.getTargetPackageName()
                 if (!targetPackage.isNullOrEmpty()) {
                     openConfiguredApp(targetPackage)
                 }
-            } else {
+            } else if (cachedIsActive && !gelafitUnlocked) {
                 // Quando apenas is_active está ativo, apenas mostra o grid
                 showAppsGrid()
             }
@@ -1131,26 +1154,30 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
             return
         }
         
-        // Verifica se está desbloqueado (usa cache local para resposta imediata)
+        // Verifica cache para resposta imediata (verifica a cada 0.5s no serviço)
+        val cachedIsActive = preferenceManager.getIsActiveCached()
+        val cachedKioskMode = preferenceManager.getKioskModeCached()
         val gelafitUnlocked = preferenceManager.isGelaFitUnlocked()
         val targetAppUnlocked = preferenceManager.isTargetAppUnlocked()
         
         // Se is_active ou modo_kiosk está ativo E não está desbloqueado, impede saída da activity
-        if ((isActive == true && !gelafitUnlocked) || (kioskMode == true && !targetAppUnlocked)) {
+        if ((cachedIsActive && !gelafitUnlocked) || (cachedKioskMode && !targetAppUnlocked)) {
             Log.d(TAG, "🔒 Tentativa de sair bloqueada")
             Handler(Looper.getMainLooper()).post {
-                if (kioskMode == true && !targetAppUnlocked) {
-                    // Quando modo_kiosk está ativo, abre o app
-                    val targetPackage = preferenceManager.getTargetPackageName()
-                    if (!targetPackage.isNullOrEmpty()) {
-                        openConfiguredApp(targetPackage)
+                if (!isFinishing && !isDestroyed) {
+                    if (cachedKioskMode && !targetAppUnlocked) {
+                        // Quando modo_kiosk está ativo, abre o app
+                        val targetPackage = preferenceManager.getTargetPackageName()
+                        if (!targetPackage.isNullOrEmpty()) {
+                            openConfiguredApp(targetPackage)
+                        }
+                    } else if (cachedIsActive && !gelafitUnlocked) {
+                        // Quando apenas is_active está ativo, apenas mostra o grid INSTANTANEAMENTE
+                        showAppsGrid()
+                        val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        startActivity(intent)
                     }
-                } else if (isActive == true && !gelafitUnlocked) {
-                    // Quando apenas is_active está ativo, apenas mostra o grid INSTANTANEAMENTE
-                    showAppsGrid()
-                    val intent = Intent(this, GelaFitWorkspaceActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    startActivity(intent)
                 }
             }
         }
@@ -1206,8 +1233,7 @@ class GelaFitWorkspaceActivity : AppCompatActivity() {
     
     companion object {
         private const val TAG = "GelaFitWorkspace"
-        private const val CHECK_INTERVAL_MS = 5000L // Verifica a cada 5 segundos
+        private const val POLLING_INTERVAL_MS = 60 * 1000L // Polling a cada 1 minuto (apenas atualiza cache)
         private const val ERROR_RETRY_DELAY_MS = 10000L // Em caso de erro, aguarda 10 segundos
-        private const val STATUS_SYNC_INTERVAL_MS = 15 * 60 * 1000L // 15 minutos
     }
 }

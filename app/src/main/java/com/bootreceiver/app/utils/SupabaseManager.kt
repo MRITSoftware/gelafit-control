@@ -533,7 +533,7 @@ class SupabaseManager {
                         lastStatus = currentStatus
                     }
                     
-                    delay(5000) // Verifica a cada 5 segundos (reduz requisições de 60/min para 12/min)
+                    delay(60000) // Verifica a cada 1 minuto (polling apenas atualiza cache)
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ Erro ao verificar status: ${e.message}", e)
                     delay(10000) // Em caso de erro, aguarda mais tempo
